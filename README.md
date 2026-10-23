@@ -1,0 +1,132 @@
+# mineflayer-boat
+
+Boat travel for [Mineflayer](https://github.com/PrismarineJS/mineflayer) bots: place a carried
+boat, board it, drive it, land on the far shore and get the boat back.
+
+> **Status: spike.** Placement, boarding, straight-line driving, dismount and recovery work on a
+> vanilla 1.21.4 server (see [Spike results](#spike-results)). Route planning over water, the
+> whole-trip `travel()` call and `estimate()` are not built yet.
+
+## Why a plugin is needed
+
+A boat ridden by a player is simulated by **that player's client**, which reports the result to the
+server with `vehicle_move` every tick. Mineflayer has no boat physics and switches its own physics
+off while mounted, so out of the box a bot in a boat cannot move. This plugin runs a small
+kinematic boat model at 20 Hz, sends `vehicle_move` (plus `steer_boat` paddles), resyncs on server
+corrections and keeps `bot.entity.position` in step with the boat.
+
+It also works around Mineflayer 4.39.0 on 1.21.2+:
+
+- `bot.placeEntity` cannot place boats (each wood is its own entity since 1.21.2, and on 4.39.0 the
+  `use_item` it sends disconnects the bot). The plugin uses `lookAt` + `activateItem` and finds the
+  spawned `*_boat` entity itself.
+- `bot.dismount()` sends *jump*, which the server ignores. A 1.21.4 server leaves a vehicle on
+  **sneak**, and takes the sneak flag only from `entity_action` (`start_sneaking`); the
+  `player_input` shift bit is stored but not applied. The plugin sends both.
+- Mineflayer does not notice that dismount (its `set_passengers` handler only looks at lists that
+  contain the bot); the plugin clears `bot.vehicle` and emits `dismount` itself.
+
+## Install
+
+```bash
+npm install mineflayer-boat
+```
+
+`mineflayer` (^4.39.0) is a peer dependency. The package is ESM and ships `.d.ts` types.
+
+## Usage
+
+```ts
+import mineflayer from 'mineflayer'
+import { Vec3 } from 'vec3'
+import { plugin as boat } from 'mineflayer-boat'
+
+const bot = mineflayer.createBot({ host: 'localhost', username: 'Boaty', version: '1.21.4' })
+bot.loadPlugin(boat)
+
+bot.once('spawn', async () => {
+  const entity = await bot.boat.place(new Vec3(2, 63, 0.5)) // a water-surface point within reach
+  await bot.boat.board(entity)
+  const result = await bot.boat.drive(new Vec3(60, 0, 0.5))  // x/z of the stop point
+  console.log(result.status, result.averageSpeed, result.corrections)
+  await bot.boat.leave({ faceToward: new Vec3(62, 63, 0.5) }) // vanilla puts the rider on that side
+  await bot.boat.recover(entity)                              // break it and pick it up again
+})
+```
+
+Options go in the bot options (`createBot({ ..., boat: { ... } })`) or through
+`bot.loadPlugin(boatPlugin({ ... }))`:
+
+| Option | Default | Meaning |
+|---|---|---|
+| `kinematics.cruiseSpeed` | `0.3` | cruising speed, blocks/tick (vanilla terminal speed on water ≈ 0.4) |
+| `kinematics.acceleration` / `deceleration` | `0.04` | speed change per tick |
+| `kinematics.maxTurnRate` | `6` | degrees per tick |
+| `maxConsecutiveCorrections` | `3` | server corrections in a row that end a drive with `rejected` |
+
+### API
+
+- `bot.boat.findItem()` – best boat item in the inventory (plain before chest boats).
+- `bot.boat.place(water, { signal?, item? })` → boat entity.
+- `bot.boat.board(boat, { signal? })` – mounts and waits for the server.
+- `bot.boat.drive(target, { signal?, onTick?, onCorrection?, maxTicks? })` → `DriveResult`
+  (`status`: `arrived | blocked | rejected | aborted | lost | timeout`, `ticks`, `distance`,
+  `averageSpeed`, `topSpeed`, `corrections`, `elapsedMs`, `position`). Drives a straight line;
+  every step is checked so the boat's 1.375-wide box stays over water with room above.
+- `bot.boat.leave({ signal?, faceToward? })` – dismounts by sneaking.
+- `bot.boat.recover(boat, { signal?, itemName?, walkTo? })` → `true` when the item is back. The
+  item usually sinks out of reach of the shore; without `walkTo` the bot swims to it in a straight
+  line and returns to where it stood.
+
+Planned seams to the host (from the design study): `walkTo(pos)` for land legs, an `AbortSignal`
+on every call, and `estimate(from, to)` in ticks.
+
+## Development
+
+```bash
+npm install
+npm run build      # dist/ with .js and .d.ts
+npm test           # unit tests (vitest), no server needed
+```
+
+### Spike against a throwaway server
+
+```bash
+npm run server:setup            # downloads vanilla 1.21.4 into spike/server/run (needs Java 21)
+bash spike/server/start.sh      # offline mode, superflat, port 25599 — keep it running
+npm run spike                   # builds a water channel via the console, then place/drive/land/recover
+```
+
+`server:setup` writes `eula=true` for that test server, i.e. it accepts the
+[Minecraft EULA](https://www.minecraft.net/eula) on your behalf. The spike refuses port 25565.
+`SPIKE_CRUISE=0.36 npm run spike` tries another cruising speed; `SPIKE_DEBUG=1` logs vehicle packets.
+
+## Spike results
+
+Vanilla 1.21.4 dedicated server, offline mode, still water 3 deep, 5-wide channel, straight run of
+57.2 blocks (2026-10-23):
+
+| Cruise | Ticks | Avg speed | Corrections | Runs |
+|---|---|---|---|---|
+| 0.30 | 197 | 0.290 b/t | 0 | 13 drives, all arrived; full GO 6/6 after the recovery fix |
+| 0.36 | 166 | 0.345 b/t | 0 | 1 drive, arrived |
+| 0.40 | 151 | 0.379 b/t | 0 | 1 drive, arrived |
+| 0.50 | 124 | 0.461 b/t | 0 | 1 drive, arrived |
+
+Before the recovery fix, 4 of 10 runs lost the boat item: it spawns at the boat with a random
+kick and sinks out of reach of the shore during its 10-tick pickup delay. `recover()` now swims to
+it.
+
+No `moved wrongly` / `moved too quickly` warnings and no kicks in any run; the server dismount
+teleport put the bot on the far shore every time. Since the server stops simulating a boat that a
+player controls, the boat's height is held at the value the server settled it at before boarding.
+
+## Acknowledgements
+
+The approach (client-side boat tick with `vehicle_move`, sneak to dismount, break and pick up)
+follows earlier in-bot implementations, in particular
+[mrubens/jevcraft](https://github.com/mrubens/jevcraft) `src/boats.js` (MIT). No code was copied.
+
+## License
+
+MIT

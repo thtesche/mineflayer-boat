@@ -1,0 +1,5 @@
+node_modules/
+dist/
+spike/server/run/
+*.log
+.DS_Store

@@ -1,0 +1,51 @@
+{
+  "name": "mineflayer-boat",
+  "version": "0.1.0",
+  "description": "Boat travel for Mineflayer bots: place, board, drive (client-side boat simulation), land and recover a boat.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "spike": "tsx spike/spike.ts",
+    "server:setup": "bash spike/server/setup.sh",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mineflayer",
+    "mineflayer-plugin",
+    "minecraft",
+    "boat"
+  ],
+  "author": "Thomas Tesche",
+  "license": "MIT",
+  "peerDependencies": {
+    "mineflayer": "^4.39.0"
+  },
+  "dependencies": {
+    "vec3": "^0.1.10"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "mineflayer": "^4.39.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}
