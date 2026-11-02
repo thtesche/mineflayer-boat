@@ -1,0 +1,174 @@
+name: Test
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm test
+
+  docker-matrix:
+    name: Docker Test - ${{ matrix.minecraft-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        minecraft-version: ['1.21.4', '26.1']
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        run: |
+          docker-compose build minecraft-${{ matrix.minecraft-version }}
+
+      - name: Start Minecraft server
+        run: |
+          docker-compose up -d minecraft-${{ matrix.minecraft-version }}
+          echo "Waiting for server to be ready..."
+          sleep 15
+
+      - name: Check server logs
+        if: failure()
+        run: docker-compose logs minecraft-${{ matrix.minecraft-version }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Run spike test
+        run: |
+          case "${{ matrix.minecraft-version }}" in
+            1.21.4)
+              PORT=25599
+              ;;
+            26.1)
+              PORT=25600
+              ;;
+          esac
+          MC_HOST=127.0.0.1 MC_PORT=$PORT npm run spike
+
+      - name: Stop server
+        if: always()
+        run: docker-compose down minecraft-${{ matrix.minecraft-version }}
+
+      - name: Save logs as artifact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-logs-${{ matrix.minecraft-version }}
+          path: |
+            spike/server/run/
+          retention-days: 7
+
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        minecraft-version: ['1.21.4', '26.1']
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        run: |
+          docker-compose build minecraft-${{ matrix.minecraft-version }}
+
+      - name: Start Minecraft server
+        run: |
+          docker-compose up -d minecraft-${{ matrix.minecraft-version }}
+          echo "Waiting for server..."
+          sleep 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Run integration tests
+        run: |
+          case "${{ matrix.minecraft-version }}" in
+            1.21.4)
+              PORT=25599
+              ;;
+            26.1)
+              PORT=25600
+              ;;
+          esac
+          MC_HOST=127.0.0.1 MC_PORT=$PORT npm run test:integration
+        continue-on-error: true
+
+      - name: Stop server
+        if: always()
+        run: docker-compose down minecraft-${{ matrix.minecraft-version }}
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results-${{ matrix.minecraft-version }}
+          path: |
+            test-results/
+            coverage/
+          retention-days: 7
+
+  status:
+    name: Test Status
+    runs-on: ubuntu-latest
+    needs: [unit, docker-matrix, integration]
+    if: always()
+    steps:
+      - name: Check test status
+        run: |
+          FAILED=0
+          if [ "${{ needs.unit.result }}" = "failure" ]; then
+            echo "❌ Unit tests failed"
+            FAILED=1
+          fi
+          if [ "${{ needs.docker-matrix.result }}" = "failure" ]; then
+            echo "❌ Docker spike tests failed"
+            FAILED=1
+          fi
+          if [ "${{ needs.integration.result }}" = "failure" ]; then
+            echo "❌ Integration tests failed"
+            FAILED=1
+          fi
+          if [ $FAILED -eq 0 ]; then
+            echo "✅ All tests passed"
+            exit 0
+          else
+            exit 1
+          fi

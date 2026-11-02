@@ -3,3 +3,17 @@ dist/
 spike/server/run/
 *.log
 .DS_Store
+
+# Test artifacts
+test/integration/**/*.html
+test-results/
+.vitest/
+coverage/
+
+# Temporary console input files
+console.in
+console.*.in
+/tmp/
+
+# Docker local data
+.docker/

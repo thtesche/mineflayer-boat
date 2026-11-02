@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  minecraft-1.21.4:
+    build:
+      context: .github/docker
+      dockerfile: minecraft-1.21.4/Dockerfile
+    container_name: mineflayer-boat-1.21.4
+    ports:
+      - "25599:25599"
+    environment:
+      - JAVA_TOOL_OPTIONS=-Xms512M -Xmx1G
+    networks:
+      - test-network
+    stdin_open: true
+    tty: true
+    entrypoint: /bin/bash
+    command: -c "touch /server/console.in && tail -f /server/console.in | java -Xms512M -Xmx1G -jar /server/server.jar nogui"
+
+  minecraft-26.1:
+    build:
+      context: .github/docker
+      dockerfile: minecraft-26.1/Dockerfile
+    container_name: mineflayer-boat-26.1
+    ports:
+      - "25600:25599"
+    environment:
+      - JAVA_TOOL_OPTIONS=-Xms512M -Xmx1G
+    networks:
+      - test-network
+    stdin_open: true
+    tty: true
+    entrypoint: /bin/bash
+    command: -c "touch /server/console.in && tail -f /server/console.in | java -Xms512M -Xmx1G -jar /server/server.jar nogui"
+
+networks:
+  test-network:
+    driver: bridge

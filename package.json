@@ -22,9 +22,18 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
+    "test": "vitest run test/unit",
+    "test:all": "npm run test && npm run test:integration",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:integration:watch": "vitest --config vitest.integration.config.ts",
+    "test:docker:1.21.4": "bash .github/scripts/docker-test.sh 1.21.4",
+    "test:docker:26.1": "bash .github/scripts/docker-test.sh 26.1",
+    "test:docker:all": "npm run test:docker:1.21.4 && npm run test:docker:26.1",
     "spike": "tsx spike/spike.ts",
     "server:setup": "bash spike/server/setup.sh",
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
     "prepublishOnly": "npm run build"
   },
   "keywords": [

@@ -1,11 +1,16 @@
 # mineflayer-boat
 
+[![Test](https://github.com/thtesche/mineflayer-boat/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/thtesche/mineflayer-boat/actions/workflows/test.yml)
+[![npm version](https://img.shields.io/npm/v/mineflayer-boat.svg)](https://www.npmjs.com/package/mineflayer-boat)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js 18+](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
+
 Boat travel for [Mineflayer](https://github.com/PrismarineJS/mineflayer) bots: place a carried
 boat, board it, drive it, land on the far shore and get the boat back.
 
-> **Status: spike.** Placement, boarding, straight-line driving, dismount and recovery work on a
-> vanilla 1.21.4 server (see [Spike results](#spike-results)). Route planning over water, the
-> whole-trip `travel()` call and `estimate()` are not built yet.
+> **Status: spike.** Placement, boarding, straight-line driving, dismount and recovery work on
+> vanilla 1.21.4 and 26.1 servers (see [Spike results](#spike-results)). Route planning over water,
+> the whole-trip `travel()` call and `estimate()` are not built yet.
 
 ## Why a plugin is needed
 
@@ -85,21 +90,47 @@ on every call, and `estimate(from, to)` in ticks.
 
 ```bash
 npm install
-npm run build      # dist/ with .js and .d.ts
-npm test           # unit tests (vitest), no server needed
+npm run build              # dist/ with .js and .d.ts
+npm test                   # unit tests (vitest), no server needed
+npm run test:integration   # integration tests (requires Docker or running server)
+npm run test:all           # all tests
 ```
 
-### Spike against a throwaway server
+### Local Testing
+
+Start vanilla 1.21.4 server:
+```bash
+npm run server:setup            # one-time: download server jar (needs Java 21)
+bash spike/server/start.sh      # keep running in background, port 25599
+```
+
+Run spike test:
+```bash
+npm run spike                   # place/board/drive/leave/recover cycle
+SPIKE_CRUISE=0.40 npm run spike # try different speed
+SPIKE_DEBUG=1 npm run spike     # log all packets
+```
+
+### Docker Multi-Version Testing
+
+Test against 1.21.4 **and** 26.1 simultaneously:
 
 ```bash
-npm run server:setup            # downloads vanilla 1.21.4 into spike/server/run (needs Java 21)
-bash spike/server/start.sh      # offline mode, superflat, port 25599 — keep it running
-npm run spike                   # builds a water channel via the console, then place/drive/land/recover
+make docker-build              # build images (once)
+make test-docker               # test both versions
+make test-docker-1.21.4        # test 1.21.4 only
+make test-docker-26.1          # test 26.1 only
 ```
 
-`server:setup` writes `eula=true` for that test server, i.e. it accepts the
-[Minecraft EULA](https://www.minecraft.net/eula) on your behalf. The spike refuses port 25565.
-`SPIKE_CRUISE=0.36 npm run spike` tries another cruising speed; `SPIKE_DEBUG=1` logs vehicle packets.
+See [DOCKER.md](DOCKER.md) for setup, troubleshooting, and manual server management.
+
+### Full Test Suite
+
+```bash
+make test-all                  # unit + integration + docker spike
+```
+
+See [TEST.md](TEST.md) for complete test documentation and architecture.
 
 ## Spike results
 
