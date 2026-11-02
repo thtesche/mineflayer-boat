@@ -1,14 +1,13 @@
 /**
  * Integration tests for boat driving at various cruise speeds.
- * Tests acceleration, terminal velocity, and control responsiveness.
+ * Drive tick counts are deterministic (the simulation advances one tick per
+ * step regardless of wall-clock), so the windows below are stable.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest'
 import type { Bot } from 'mineflayer'
-import mineflayer from 'mineflayer'
-import { Vec3 } from 'vec3'
-import { boatPlugin, type DriveResult } from '../../src/index.js'
-import { defaultConfig, defaultArena, buildArena } from './setup.js'
+import { type DriveResult } from '../../src/index.js'
+import { defaultConfig, defaultArena, connectBot, resetArena, sleep } from './setup.js'
 
 interface SpeedTest {
   cruiseSpeed: number
@@ -20,62 +19,48 @@ const speedTests: SpeedTest[] = [
   {
     cruiseSpeed: 0.25,
     expectedTicks: { min: 200, max: 280 },
-    expectedAvgSpeed: { min: 0.20, max: 0.30 },
+    expectedAvgSpeed: { min: 0.2, max: 0.3 },
   },
   {
-    cruiseSpeed: 0.30,
+    cruiseSpeed: 0.3,
     expectedTicks: { min: 180, max: 220 },
     expectedAvgSpeed: { min: 0.26, max: 0.32 },
   },
   {
-    cruiseSpeed: 0.40,
+    cruiseSpeed: 0.4,
     expectedTicks: { min: 130, max: 180 },
     expectedAvgSpeed: { min: 0.31, max: 0.45 },
   },
 ]
 
 describe('Boat Driving - Speed Variations', () => {
-  let botTemplate: Bot
+  let bot: Bot
+  const testConfig = { ...defaultConfig, username: 'BoatySpeed' }
 
   beforeAll(async () => {
-    botTemplate = mineflayer.createBot({
-      host: defaultConfig.host,
-      port: defaultConfig.port,
-      username: 'BoatySpeed',
-      version: defaultConfig.version,
-      auth: 'offline',
-    })
-    botTemplate.loadPlugin(boatPlugin())
+    bot = await connectBot(testConfig)
+  })
 
-    await new Promise<void>((resolve, reject) => {
-      botTemplate.on('spawn', () => resolve())
-      botTemplate.on('error', reject)
-      setTimeout(() => reject(new Error('spawn timeout')), 30000)
-    })
-
-    const consoleFile = '/tmp/console-drive.in'
-    await buildArena(botTemplate, defaultConfig, defaultArena, consoleFile)
+  beforeEach(async () => {
+    await resetArena(bot, testConfig, defaultArena)
   })
 
   afterAll(() => {
     return new Promise<void>((resolve) => {
-      botTemplate.end()
+      bot.end()
       setTimeout(resolve, 500)
     })
   })
 
   speedTests.forEach((test) => {
     it(`drives at cruise speed ${test.cruiseSpeed} b/t`, async () => {
-      const bot = botTemplate
-
       const boat = await bot.boat.place(defaultArena.launch)
       await bot.waitForTicks(10)
 
       await bot.boat.board(boat)
-      await bot.waitForTicks(5)
+      await sleep(250) // mounted: physicsTick is paused, so sleep instead of waitForTicks
 
-      // Override cruise speed temporarily
-      ;(bot.boat as any).state.kinematics.cruiseSpeed = test.cruiseSpeed
+      bot.boat.options.kinematics.cruiseSpeed = test.cruiseSpeed
 
       const result: DriveResult = await bot.boat.drive(defaultArena.finish)
 
@@ -84,24 +69,22 @@ describe('Boat Driving - Speed Variations', () => {
       expect(result.ticks).toBeLessThanOrEqual(test.expectedTicks.max)
       expect(result.averageSpeed).toBeGreaterThanOrEqual(test.expectedAvgSpeed.min)
       expect(result.averageSpeed).toBeLessThanOrEqual(test.expectedAvgSpeed.max)
-      expect(result.corrections).toBeLessThanOrEqual(3) // Max 3 corrections tolerated
+      expect(result.corrections).toBeLessThanOrEqual(3)
     })
   })
 
   it('maintains stable velocity during cruise', async () => {
-    const bot = botTemplate
     const boat = await bot.boat.place(defaultArena.launch)
     await bot.waitForTicks(10)
 
     await bot.boat.board(boat)
-    await bot.waitForTicks(5)
+    await sleep(250) // mounted: physicsTick is paused, so sleep instead of waitForTicks
 
-    ;(bot.boat as any).state.kinematics.cruiseSpeed = 0.30
+    bot.boat.options.kinematics.cruiseSpeed = 0.3
 
     const result = await bot.boat.drive(defaultArena.finish)
 
-    // Speed variance should be small (>80% of runs hit target speed)
     expect(result.averageSpeed).toBeGreaterThan(0.26)
-    expect(result.topSpeed).toBeLessThan(0.35)
+    expect(result.topSpeed).toBeLessThanOrEqual(0.31)
   })
 })

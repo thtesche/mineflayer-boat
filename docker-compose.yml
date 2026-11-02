@@ -7,13 +7,15 @@ services:
     ports:
       - "25599:25599"
     environment:
-      - JAVA_TOOL_OPTIONS=-Xms512M -Xmx1G
+      # 1G heap caused GC pauses that lagged the server and flaked the plugin's
+      # confirm timeouts late in a 32-test run; 2G keeps TPS stable throughout.
+      - JAVA_TOOL_OPTIONS=-Xms1G -Xmx2G
     networks:
       - test-network
     stdin_open: true
     tty: true
     entrypoint: /bin/sh
-    command: -c "touch /server/console.in && tail -f /server/console.in | java -Xms512M -Xmx1G -jar /server/server.jar nogui"
+    command: -c "touch /server/console.in && tail -f /server/console.in | java -Xms1G -Xmx2G -jar /server/server.jar nogui"
 
   minecraft-26.1:
     build:
@@ -23,13 +25,15 @@ services:
     ports:
       - "25600:25599"
     environment:
-      - JAVA_TOOL_OPTIONS=-Xms512M -Xmx1G
+      # 1G heap caused GC pauses that lagged the server and flaked the plugin's
+      # confirm timeouts late in a 32-test run; 2G keeps TPS stable throughout.
+      - JAVA_TOOL_OPTIONS=-Xms1G -Xmx2G
     networks:
       - test-network
     stdin_open: true
     tty: true
     entrypoint: /bin/sh
-    command: -c "touch /server/console.in && tail -f /server/console.in | java -Xms512M -Xmx1G -jar /server/server.jar nogui"
+    command: -c "touch /server/console.in && tail -f /server/console.in | java -Xms1G -Xmx2G -jar /server/server.jar nogui"
 
 networks:
   test-network:

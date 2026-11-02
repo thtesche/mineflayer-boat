@@ -3,16 +3,19 @@
  * Each test file imports from here instead of duplicating server setup logic.
  */
 
-import { appendFileSync, existsSync } from 'node:fs'
+import { appendFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
-import { fileURLToPath } from 'node:url'
 import type { Bot } from 'mineflayer'
 import mineflayer from 'mineflayer'
 import { Vec3 } from 'vec3'
-import { describe, beforeAll, afterAll, expect } from 'vitest'
 import { boatPlugin } from '../../src/index.js'
 
-const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
+/**
+ * Plain time-based delay. Use this (not `bot.waitForTicks`) whenever the bot is
+ * mounted: mineflayer sets `shouldUsePhysics = false` on mount and stops
+ * emitting `physicsTick`, so `waitForTicks` would hang until its own timeout.
+ */
+export const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
 
 export interface TestConfig {
   host: string
@@ -28,13 +31,6 @@ export interface TestArena {
   finish: Vec3
   farShore: Vec3
   laneZ: number
-}
-
-export interface IntegrationTestContext {
-  bot: Bot
-  config: TestConfig
-  arena: TestArena
-  serverConsoleFile: string
 }
 
 /**
@@ -65,13 +61,28 @@ export const defaultArena: TestArena = {
  * /server/console.in via `docker exec`; otherwise append to the local file.
  */
 export function sendConsoleCommand(file: string, cmd: string): void {
+  sendConsoleCommands(file, [cmd])
+}
+
+/**
+ * Send several console commands in a single write. Batching matters under
+ * Docker: each `docker exec` is a synchronous process spawn that blocks the
+ * event loop, so one exec for a dozen commands (instead of a dozen execs)
+ * keeps the bot from falling behind on packets and flaking confirm timeouts.
+ */
+export function sendConsoleCommands(file: string, cmds: string[]): void {
+  if (cmds.length === 0) return
+  const payload = cmds.join('\n') + '\n'
   const container = process.env.MC_DOCKER
   if (container != null && container !== '') {
+    // Bound the exec: if the docker daemon wedges, fail fast instead of
+    // hanging the whole suite (execFileSync has no implicit timeout).
     execFileSync('docker', ['exec', '-i', container, 'sh', '-c', 'cat >> /server/console.in'], {
-      input: cmd + '\n',
+      input: payload,
+      timeout: 15000,
     })
   } else {
-    appendFileSync(file, cmd + '\n')
+    appendFileSync(file, payload)
   }
 }
 
@@ -80,7 +91,17 @@ export function sendConsoleCommand(file: string, cmd: string): void {
  * Superflat: bedrock -64, dirt -63..-62, grass -61, ground y=-60
  * Water channel: x 0..59, z -2..2, y -63..-61
  */
-export async function buildArena(bot: Bot, config: TestConfig, arena: TestArena, consoleFile: string): Promise<void> {
+export async function buildArena(
+  bot: Bot,
+  config: TestConfig,
+  arena: TestArena,
+  consoleFile: string = `/tmp/console-${config.port}.in`,
+): Promise<void> {
+  // Only the water band (y -63..-61) is ever reshaped by tests (dirt walls,
+  // extended water), so the grass/water fills reset everything a test can
+  // change. The old `fill ... air` over y -60..-50 touched ~10k blocks every
+  // reset for nothing (superflat is already air above -61) and lagged the
+  // server enough to flake the confirm timeouts late in a run; it is gone.
   const cmds = [
     'gamerule doDaylightCycle false',
     'gamerule doMobSpawning false',
@@ -89,7 +110,6 @@ export async function buildArena(bot: Bot, config: TestConfig, arena: TestArena,
     'weather clear',
     'difficulty peaceful',
     'kill @e[type=!minecraft:player]',
-    'fill -6 -60 -6 66 -50 6 air',
     'fill -6 -63 -6 66 -61 6 grass_block',
     'fill 0 -63 -2 59 -61 2 water',
     `clear ${config.username}`,
@@ -98,7 +118,7 @@ export async function buildArena(bot: Bot, config: TestConfig, arena: TestArena,
     `tp ${config.username} ${arena.start.x} ${arena.start.y} ${arena.start.z} -90 30`,
   ]
 
-  for (const cmd of cmds) sendConsoleCommand(consoleFile, cmd)
+  sendConsoleCommands(consoleFile, cmds)
 
   // Wait for arena to be ready
   const deadline = Date.now() + 10000
@@ -139,66 +159,44 @@ export function createTestBot(config: TestConfig): Bot {
 }
 
 /**
- * Describe block for integration tests with common lifecycle.
- * Handles server connection, arena setup, bot cleanup.
- *
- * Example:
- * ```ts
- * integrationTest('boat placement', defaultConfig, async (ctx) => {
- *   const boat = await ctx.bot.boat.place(ctx.arena.launch)
- *   expect(boat.name).toContain('boat')
- * })
- * ```
+ * Connect a bot, load the boat plugin, and wait for it to spawn.
  */
-export function integrationTest(
-  name: string,
-  config: TestConfig | (() => TestConfig),
-  arena: TestArena | (() => TestArena),
-  fn: (ctx: IntegrationTestContext) => Promise<void>,
-): void {
-  const resolveConfig = typeof config === 'function' ? config() : config
-  const resolveArena = typeof arena === 'function' ? arena() : arena
-  const consoleFile = resolveConfig.host === '127.0.0.1' && !process.env.MC_DOCKER ? 
-    fileURLToPath(new URL('../../spike/server/run/console.in', import.meta.url)) :
-    `/tmp/console-${resolveConfig.port}.in`
+export async function connectBot(config: TestConfig): Promise<Bot> {
+  const bot = createTestBot(config)
 
-  describe(name, () => {
-    let bot: Bot
-
-    beforeAll(async () => {
-      bot = createTestBot(resolveConfig)
-
-      await new Promise<void>((resolve, reject) => {
-        bot.on('spawn', () => resolve())
-        bot.on('error', reject)
-        bot.on('kicked', (reason: any) => reject(new Error(`kicked: ${reason}`)))
-
-        setTimeout(() => reject(new Error('bot spawn timeout')), 30000)
-      })
-
-      await buildArena(bot, resolveConfig, resolveArena, consoleFile)
-    })
-
-    afterAll(async () => {
-      return new Promise<void>((resolve) => {
-        bot.end()
-        setTimeout(resolve, 500)
-      })
-    })
-
-    // Wrapper: each test gets full context
-    return (fn as any)(
-      async (testFn: (ctx: IntegrationTestContext) => Promise<void>) => {
-        const ctx: IntegrationTestContext = {
-          bot,
-          config: resolveConfig,
-          arena: resolveArena,
-          serverConsoleFile: consoleFile,
-        }
-        await testFn(ctx)
-      },
-    )
+  await new Promise<void>((resolve, reject) => {
+    bot.on('spawn', () => resolve())
+    bot.on('error', reject)
+    bot.on('kicked', (reason: any) => reject(new Error(`kicked: ${JSON.stringify(reason)}`)))
+    setTimeout(() => reject(new Error('bot spawn timeout')), 30000)
   })
+
+  return bot
+}
+
+/**
+ * Reset the world and the bot to a clean arena. Call from `beforeEach` so each
+ * test starts from the same state: all files share one world, and a previous
+ * test may have left the bot mid-drive, mounted, or on the far shore.
+ */
+export async function resetArena(bot: Bot, config: TestConfig, arena: TestArena): Promise<void> {
+  // Drop any client-side vehicle state left over from a previous test; the
+  // server already removed the boat via `kill @e`, but mineflayer can miss the
+  // dismount on 1.21.x (see leave() in src/boat.ts).
+  const anyBot = bot as any
+  if (anyBot.vehicle != null) {
+    anyBot.vehicle = null
+    if (anyBot.entity != null) anyBot.entity.vehicle = null
+  }
+  bot.clearControlStates()
+  await buildArena(bot, config, arena)
+  // Let the reset fully drain before the test places a boat. buildArena's poll
+  // can pass while the server is still applying the kill/fill/tp from this (or a
+  // back-to-back previous) reset; placing a boat into that churn desyncs it and
+  // the next drive is immediately "lost". A short settle makes resets that land
+  // close together — e.g. a near-instant test followed by the next beforeEach —
+  // safe.
+  await sleep(500)
 }
 
 
