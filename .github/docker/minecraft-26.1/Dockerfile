@@ -2,19 +2,18 @@
 # Java 21 for compatibility; update when Java 25 is available
 FROM eclipse-temurin:21-jre-alpine
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apk add --no-cache \
     curl \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    ca-certificates
 
 WORKDIR /server
 
 # Download vanilla server
 # 26.1 JAR: If version 26.1 is released, update this URL
 # For now: Using 1.21.4 as placeholder (will be replaced with 26.1 when available)
-RUN curl -fsSL https://piston-data.mojang.com/v1/objects/145ff0858209bcfc164859ba735d4199aafa1eea/server.jar \
+RUN curl -fsSL https://piston-data.mojang.com/v1/objects/4707d00eb834b446575d89a61a11b5d548d8c001/server.jar \
     -o server.jar && \
-    test -f server.jar && echo "✓ Server JAR downloaded (145ff08...)" || \
+    test -f server.jar && echo "✓ Server JAR downloaded (1.21.4 placeholder)" || \
     (echo "⚠️  Server JAR download failed" && exit 1)
 
 # Accept EULA

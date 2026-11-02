@@ -7,7 +7,7 @@ RUN apk add --no-cache \
 WORKDIR /server
 
 # Download vanilla 1.21.4 server
-RUN curl -fsSL https://piston-data.mojang.com/v1/objects/145ff0858209bcfc164859ba735d4199aafa1eea/server.jar \
+RUN curl -fsSL https://piston-data.mojang.com/v1/objects/4707d00eb834b446575d89a61a11b5d548d8c001/server.jar \
     -o server.jar
 
 # Accept EULA

@@ -26,7 +26,7 @@ case "$VERSION" in
 esac
 
 echo "🚀 Starting Minecraft $VERSION in Docker..."
-docker-compose up -d "$CONTAINER"
+docker compose up -d "$CONTAINER"
 
 echo "⏳ Waiting for server to be ready (max ${TIMEOUT}s)..."
 START_TIME=$(date +%s)
@@ -39,7 +39,7 @@ while true; do
   ELAPSED=$(($(date +%s) - START_TIME))
   if [ $ELAPSED -gt $TIMEOUT ]; then
     echo "❌ Server startup timeout"
-    docker-compose logs "$CONTAINER"
+    docker compose logs "$CONTAINER"
     exit 1
   fi
   
@@ -59,7 +59,7 @@ TEST_RESULT=$?
 
 echo ""
 echo "🛑 Stopping server..."
-docker-compose down
+docker compose down
 
 if [ $TEST_RESULT -eq 0 ]; then
   echo "✅ Test passed for Minecraft $VERSION"

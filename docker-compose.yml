@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   minecraft-1.21.4:
     build:
@@ -14,7 +12,7 @@ services:
       - test-network
     stdin_open: true
     tty: true
-    entrypoint: /bin/bash
+    entrypoint: /bin/sh
     command: -c "touch /server/console.in && tail -f /server/console.in | java -Xms512M -Xmx1G -jar /server/server.jar nogui"
 
   minecraft-26.1:
@@ -30,7 +28,7 @@ services:
       - test-network
     stdin_open: true
     tty: true
-    entrypoint: /bin/bash
+    entrypoint: /bin/sh
     command: -c "touch /server/console.in && tail -f /server/console.in | java -Xms512M -Xmx1G -jar /server/server.jar nogui"
 
 networks:

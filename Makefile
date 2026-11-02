@@ -38,15 +38,15 @@ test-all:
 	npm run test:all
 
 docker-build:
-	@command -v docker-compose >/dev/null 2>&1 || { echo "❌ docker-compose not found. Install: https://docs.docker.com/compose/install/"; exit 1; }
+	@docker compose version >/dev/null 2>&1 || { echo "❌ 'docker compose' (v2) not found. Install: https://docs.docker.com/compose/install/"; exit 1; }
 	npm run docker:build
 
 docker-up:
-	@command -v docker-compose >/dev/null 2>&1 || { echo "❌ docker-compose not found. Install: https://docs.docker.com/compose/install/"; exit 1; }
+	@docker compose version >/dev/null 2>&1 || { echo "❌ 'docker compose' (v2) not found. Install: https://docs.docker.com/compose/install/"; exit 1; }
 	npm run docker:up
 
 docker-down:
-	@command -v docker-compose >/dev/null 2>&1 || { echo "⚠️  docker-compose not running, skipping"; exit 0; }
+	@docker compose version >/dev/null 2>&1 || { echo "⚠️  'docker compose' not available, skipping"; exit 0; }
 	npm run docker:down
 
 test-docker-1.21.4:
@@ -68,5 +68,5 @@ spike:
 
 clean:
 	rm -rf dist/
-	docker-compose down -v
+	docker compose down -v
 	rm -rf spike/server/run/

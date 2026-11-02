@@ -31,9 +31,9 @@
     "test:docker:all": "npm run test:docker:1.21.4 && npm run test:docker:26.1",
     "spike": "tsx spike/spike.ts",
     "server:setup": "bash spike/server/setup.sh",
-    "docker:build": "docker-compose build",
-    "docker:up": "docker-compose up -d",
-    "docker:down": "docker-compose down",
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
