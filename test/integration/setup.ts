@@ -4,6 +4,7 @@
  */
 
 import { appendFileSync, existsSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import type { Bot } from 'mineflayer'
 import mineflayer from 'mineflayer'
@@ -60,10 +61,18 @@ export const defaultArena: TestArena = {
 
 /**
  * Write a command to the server console (Docker container or local).
- * For Docker: `docker exec` writes directly; for local: append to console.in file.
+ * When MC_DOCKER names a running container, pipe the command into its
+ * /server/console.in via `docker exec`; otherwise append to the local file.
  */
 export function sendConsoleCommand(file: string, cmd: string): void {
-  appendFileSync(file, cmd + '\n')
+  const container = process.env.MC_DOCKER
+  if (container != null && container !== '') {
+    execFileSync('docker', ['exec', '-i', container, 'sh', '-c', 'cat >> /server/console.in'], {
+      input: cmd + '\n',
+    })
+  } else {
+    appendFileSync(file, cmd + '\n')
+  }
 }
 
 /**

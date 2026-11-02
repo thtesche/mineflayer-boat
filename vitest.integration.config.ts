@@ -7,6 +7,13 @@ export default defineConfig({
     hookTimeout: 60000,  // 1 minute for setup/teardown
     globals: true,
     environment: 'node',
+    // All files share one Minecraft world, so they must not run concurrently:
+    // each file's buildArena runs `kill @e` and re-fills the channel, which
+    // would wipe out boats from any file running at the same time.
+    fileParallelism: false,
+    pool: 'forks',
+    poolOptions: { forks: { singleFork: true } },
+    sequence: { concurrent: false },
     reporter: 'verbose',
     outputFile: './test-results/integration.json',
     coverage: {

@@ -8,6 +8,7 @@
 //   npm run server:setup && bash spike/server/start.sh   # other terminal
 //   npm run spike
 import { appendFileSync, existsSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import mineflayer from 'mineflayer'
 import { Vec3 } from 'vec3'
@@ -16,13 +17,16 @@ import { boatPlugin, type DriveResult } from '../src/index.js'
 const HOST = process.env.MC_HOST ?? '127.0.0.1'
 const PORT = Number(process.env.MC_PORT ?? 25599)
 const USERNAME = process.env.MC_USERNAME ?? 'Boaty'
+// When MC_DOCKER names a running container, commands go to its console via
+// `docker exec`; otherwise they append to a local console.in FIFO.
+const DOCKER = process.env.MC_DOCKER ?? ''
 const CONSOLE = process.env.SPIKE_CONSOLE ?? fileURLToPath(new URL('./server/run/console.in', import.meta.url))
 
 if (PORT === 25565) {
   console.error('Refusing port 25565: that is the default LAN/run world port. Use the throwaway test server.')
   process.exit(2)
 }
-if (!existsSync(CONSOLE)) {
+if (DOCKER === '' && !existsSync(CONSOLE)) {
   console.error(`No server console at ${CONSOLE}; start the test server with spike/server/start.sh`)
   process.exit(2)
 }
@@ -37,7 +41,13 @@ const FINISH = new Vec3(59.0, 0, LANE_Z)
 const FAR_SHORE = new Vec3(61, -60, LANE_Z)
 
 const sleep = async (ms: number): Promise<void> => await new Promise(resolve => setTimeout(resolve, ms))
-const consoleCommand = (cmd: string): void => appendFileSync(CONSOLE, cmd + '\n')
+const consoleCommand = (cmd: string): void => {
+  if (DOCKER !== '') {
+    execFileSync('docker', ['exec', '-i', DOCKER, 'sh', '-c', 'cat >> /server/console.in'], { input: cmd + '\n' })
+  } else {
+    appendFileSync(CONSOLE, cmd + '\n')
+  }
+}
 const fmt = (v: { x: number, y: number, z: number }): string => `(${v.x.toFixed(2)}, ${v.y.toFixed(2)}, ${v.z.toFixed(2)})`
 
 const bot = mineflayer.createBot({ host: HOST, port: PORT, username: USERNAME, version: '1.21.4', auth: 'offline' })
