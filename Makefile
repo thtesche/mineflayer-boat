@@ -38,12 +38,15 @@ test-all:
 	npm run test:all
 
 docker-build:
+	@command -v docker-compose >/dev/null 2>&1 || { echo "❌ docker-compose not found. Install: https://docs.docker.com/compose/install/"; exit 1; }
 	npm run docker:build
 
 docker-up:
+	@command -v docker-compose >/dev/null 2>&1 || { echo "❌ docker-compose not found. Install: https://docs.docker.com/compose/install/"; exit 1; }
 	npm run docker:up
 
 docker-down:
+	@command -v docker-compose >/dev/null 2>&1 || { echo "⚠️  docker-compose not running, skipping"; exit 0; }
 	npm run docker:down
 
 test-docker-1.21.4:

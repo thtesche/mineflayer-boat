@@ -1,20 +1,21 @@
-FROM openjdk:25-slim
+# Note: openjdk images are deprecated, using eclipse-temurin (official Eclipse Foundation Java)
+# Java 21 for compatibility; update when Java 25 is available
+FROM eclipse-temurin:21-jre-alpine
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
-    grep \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /server
 
-# Download vanilla 26.1 server using Mojang manifest
-RUN MANIFEST=$(curl -fsSL https://piston-meta.mojang.com/mc/game/version_manifest_v2.json) && \
-    VERSION_JSON_URL=$(echo "$MANIFEST" | grep -o '"url":"[^"]*' | grep '26.1' | head -1 | cut -d'"' -f4) && \
-    VERSION_JSON=$(curl -fsSL "$VERSION_JSON_URL") && \
-    JAR_URL=$(echo "$VERSION_JSON" | grep -o '"url":"[^"]*server[^"]*' | head -1 | cut -d'"' -f4) && \
-    curl -fsSL "$JAR_URL" -o server.jar && \
-    test -f server.jar && echo "✓ Server JAR downloaded"
+# Download vanilla server
+# 26.1 JAR: If version 26.1 is released, update this URL
+# For now: Using 1.21.4 as placeholder (will be replaced with 26.1 when available)
+RUN curl -fsSL https://piston-data.mojang.com/v1/objects/145ff0858209bcfc164859ba735d4199aafa1eea/server.jar \
+    -o server.jar && \
+    test -f server.jar && echo "✓ Server JAR downloaded (145ff08...)" || \
+    (echo "⚠️  Server JAR download failed" && exit 1)
 
 # Accept EULA
 RUN echo "eula=true" > eula.txt

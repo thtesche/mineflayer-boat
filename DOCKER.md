@@ -149,10 +149,28 @@ Each container has readiness check:
 
 ## Troubleshooting
 
+### "docker-compose: command not found"
+```bash
+# Check if docker-compose is installed
+docker-compose --version
+
+# If not installed:
+# Option 1: Install as standalone
+curl -fsSL https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
+chmod +x /usr/local/bin/docker-compose
+
+# Option 2: Use docker compose (v2, no hyphen)
+docker compose version  # If this works, use: docker compose build
+
+# Option 3: Install via package manager
+# macOS: brew install docker-compose
+# Ubuntu: apt-get install docker-compose
+```
+
 ### Build fails: "Java not found"
 ```bash
 docker --version  # >= 20.10
-docker-compose --version  # >= 1.29
+docker-compose --version  # >= 1.29 or use 'docker compose'
 ```
 
 ### Build fails: Network error downloading JAR

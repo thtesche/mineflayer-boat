@@ -1,9 +1,8 @@
-FROM openjdk:21-slim
+FROM eclipse-temurin:21-jre-alpine
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apk add --no-cache \
     curl \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    ca-certificates
 
 WORKDIR /server
 
