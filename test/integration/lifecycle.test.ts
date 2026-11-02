@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import type Bot from 'mineflayer'
+import type { Bot } from 'mineflayer'
 import mineflayer from 'mineflayer'
 import { Vec3 } from 'vec3'
 import { boatPlugin } from '../../src/index.js'
@@ -112,8 +112,12 @@ describe('Boat Lifecycle', () => {
   it('emits boat events in correct order', async () => {
     const events: string[] = []
 
-    bot.on('mount', () => events.push('mount'))
-    bot.on('dismount', () => events.push('dismount'))
+    bot.on('mount', () => {
+      events.push('mount')
+    })
+    bot.on('dismount', () => {
+      events.push('dismount')
+    })
 
     const boat = await bot.boat.place(defaultArena.launch)
     await bot.waitForTicks(10)

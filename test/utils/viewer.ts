@@ -11,7 +11,7 @@
  * ```
  */
 
-import type Bot from 'mineflayer'
+import type { Bot } from 'mineflayer'
 import { Vec3 } from 'vec3'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
@@ -179,11 +179,11 @@ export class TestViewer {
           </div>
           <div class="stat-row">
             <span class="stat-label">Start Pos:</span>
-            <span class="stat-value">${this.snapshots.length > 0 ? \`(\${this.snapshots[0].pos.x.toFixed(1)}, \${this.snapshots[0].pos.y.toFixed(1)}, \${this.snapshots[0].pos.z.toFixed(1)})\` : 'N/A'}</span>
+            <span class="stat-value">${this.snapshots.length > 0 ? '(' + this.snapshots[0].pos.x.toFixed(1) + ', ' + this.snapshots[0].pos.y.toFixed(1) + ', ' + this.snapshots[0].pos.z.toFixed(1) + ')' : 'N/A'}</span>
           </div>
           <div class="stat-row">
             <span class="stat-label">End Pos:</span>
-            <span class="stat-value">${this.snapshots.length > 0 ? \`(\${this.snapshots[this.snapshots.length - 1].pos.x.toFixed(1)}, \${this.snapshots[this.snapshots.length - 1].pos.y.toFixed(1)}, \${this.snapshots[this.snapshots.length - 1].pos.z.toFixed(1)})\` : 'N/A'}</span>
+            <span class="stat-value">${this.snapshots.length > 0 ? '(' + this.snapshots[this.snapshots.length - 1].pos.x.toFixed(1) + ', ' + this.snapshots[this.snapshots.length - 1].pos.y.toFixed(1) + ', ' + this.snapshots[this.snapshots.length - 1].pos.z.toFixed(1) + ')' : 'N/A'}</span>
           </div>
           <div class="stat-row">
             <span class="stat-label">Distance:</span>

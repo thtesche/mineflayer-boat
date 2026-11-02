@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import type Bot from 'mineflayer'
+import type { Bot } from 'mineflayer'
 import mineflayer from 'mineflayer'
 import { Vec3 } from 'vec3'
 import { boatPlugin } from '../../src/index.js'

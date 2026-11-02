@@ -5,7 +5,7 @@
 
 import { appendFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import type Bot from 'mineflayer'
+import type { Bot } from 'mineflayer'
 import mineflayer from 'mineflayer'
 import { Vec3 } from 'vec3'
 import { describe, beforeAll, afterAll, expect } from 'vitest'
@@ -192,32 +192,4 @@ export function integrationTest(
   })
 }
 
-/**
- * Simplified: if you just want describe + setup without boilerplate
- */
-export function withBot(name: string, config: TestConfig, fn: (bot: Bot) => Promise<void>): void {
-  describe(name, () => {
-    let bot: Bot
 
-    beforeAll(async () => {
-      bot = createTestBot(config)
-
-      await new Promise<void>((resolve, reject) => {
-        bot.on('spawn', () => resolve())
-        bot.on('error', reject)
-        bot.on('kicked', (reason: any) => reject(new Error(`kicked: ${reason}`)))
-        setTimeout(() => reject(new Error('bot spawn timeout')), 30000)
-      })
-    })
-
-    afterAll(async () => {
-      return new Promise<void>((resolve) => {
-        bot.end()
-        setTimeout(resolve, 500)
-      })
-    })
-
-    // Tests defined inside fn will have bot in scope
-    return fn(bot)
-  })
-}
