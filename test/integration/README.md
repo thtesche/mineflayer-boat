@@ -1,6 +1,7 @@
 # Integration Tests
 
 End-to-end tests for mineflayer-boat that require a running Minecraft server.
+All 31 tests pass reliably and gate CI on GitHub Actions.
 
 ## Prerequisites
 
@@ -182,6 +183,25 @@ Water blocks not detected. Check arena fill command completed:
 ```bash
 docker exec minecraft-1.21.4 sh -c "echo 'testforblock 30 -61 0 water' >> /server/console.in"
 ```
+
+## Visualizing Bot Movement
+
+Collect bot position history from a test drive and view it as an interactive 2D animation:
+
+```bash
+npx tsx spike/visualize.ts
+# Generates test-results/vizdata.json with 193 frames of position data
+# Open test-results/boat-visualization.html in a browser
+```
+
+The visualization shows:
+- 2D overhead view of the arena (water channel, shores, start/finish)
+- Animated bot trail colored by frame
+- Play/pause controls and frame-by-frame stepping
+- Real-time metrics during playback (position, speed, corrections)
+
+This is useful for debugging pathfinding issues, verifying the physics model, or just watching
+the bot work.
 
 ## Future Enhancements
 

@@ -8,9 +8,9 @@
 Boat travel for [Mineflayer](https://github.com/PrismarineJS/mineflayer) bots: place a carried
 boat, board it, drive it, land on the far shore and get the boat back.
 
-> **Status: spike.** Placement, boarding, straight-line driving, dismount and recovery work on
-> vanilla 1.21.4 and 26.1 servers (see [Spike results](#spike-results)). Route planning over water,
-> the whole-trip `travel()` call and `estimate()` are not built yet.
+> **Status: Stable with integration tests.** Placement, boarding, straight-line driving, dismount and recovery
+> work reliably on vanilla 1.21.4 and 26.1 servers. Full integration test suite (31 tests, 1 skipped) gates CI.
+> Route planning over water, the whole-trip `travel()` call and `estimate()` are not built yet.
 
 ## Why a plugin is needed
 
@@ -96,6 +96,31 @@ npm run test:integration   # integration tests (requires Docker or running serve
 npm run test:all           # all tests
 ```
 
+### Unit Tests
+
+```bash
+npm test
+```
+
+Tests the kinematics model and water detection offline, no server needed.
+
+### Integration Tests
+
+Full end-to-end tests on live Minecraft servers (1.21.4 and 26.1):
+
+```bash
+npm run test:integration
+```
+
+Tests placement, boarding, straight-line driving at various speeds, dismount mechanics, server
+correction handling, and edge cases (blockage, chunk boundaries, long distances). See
+[`test/integration/README.md`](test/integration/README.md) for details on each test file and how
+to visualize bot movement.
+
+Results are stable: 31 tests pass, 1 skipped. Each test gets a fresh arena (shared Minecraft world
+is reset with server console commands), and the full suite is serialized (tests must not run
+concurrently or they will interfere with each other's world state).
+
 ### Local Testing
 
 Start vanilla 1.21.4 server:
@@ -116,21 +141,28 @@ SPIKE_DEBUG=1 npm run spike     # log all packets
 Test against 1.21.4 **and** 26.1 simultaneously:
 
 ```bash
-make docker-build              # build images (once)
-make test-docker               # test both versions
-make test-docker-1.21.4        # test 1.21.4 only
-make test-docker-26.1          # test 26.1 only
+docker compose up -d                                    # start servers
+MC_HOST=127.0.0.1 MC_PORT=25599 npm run test:integration    # test 1.21.4
+MC_HOST=127.0.0.1 MC_PORT=25600 npm run test:integration    # test 26.1
+docker compose down                                    # stop servers
 ```
 
 See [DOCKER.md](DOCKER.md) for setup, troubleshooting, and manual server management.
 
-### Full Test Suite
+### Visualizing Bot Movement
+
+Collect position history from a test run and visualize it interactively:
 
 ```bash
-make test-all                  # unit + integration + docker spike
+npx tsx spike/visualize.ts > /tmp/viz.json
+# Open test-results/boat-visualization.html in a browser
 ```
 
-See [TEST.md](TEST.md) for complete test documentation and architecture.
+The visualization shows:
+- 2D overhead map of the test arena (water channel, shores)
+- Animated bot trail during the drive
+- Play/pause controls and speed adjustment
+- Real-time metrics (status, distance, speed, corrections)
 
 ## Spike results
 
