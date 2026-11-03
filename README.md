@@ -201,20 +201,23 @@ docker compose down                                    # stop servers
 
 See [DOCKER.md](DOCKER.md) for setup, troubleshooting, and manual server management.
 
-### Visualizing Bot Movement
+### Debugging with Position History
 
-Collect position history from a test run and visualize it interactively:
+For manual debugging of difficult test cases (e.g. fehlgeschlagene Pathfinding-Tests oder Edge-Case-Fahrten),
+collect bot position history:
 
 ```bash
 npx tsx spike/visualize.ts > /tmp/viz.json
-# Open test-results/boat-visualization.html in a browser
+cat /tmp/viz.json | jq .  # inspect arena, history, and final result
 ```
 
-The visualization shows:
-- 2D overhead map of the test arena (water channel, shores)
-- Animated bot trail during the drive
-- Play/pause controls and speed adjustment
-- Real-time metrics (status, distance, speed, corrections)
+The output includes:
+- Arena geometry (water channel, shores, obstacles)
+- Position samples during the drive (every 50ms)
+- Final drive result (status, distance, ticks, corrections)
+
+**Interactive HTML visualization (2D map, animated trail, controls) planned for later** — useful for
+visual debugging of pathfinding and edge-case drives, but low priority.
 
 ## Spike results
 
