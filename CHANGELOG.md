@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/thtesche/mineflayer-boat/compare/v1.1.0...v1.1.1) (2026-11-03)
+
+
+### Bug Fixes
+
+* pathfinding unit tests now pass with correct boat-width water channels ([922ff8b](https://github.com/thtesche/mineflayer-boat/commit/922ff8b0a589b0a2bf6fedfa740548d90ea027dc))
+
 # [1.1.0](https://github.com/thtesche/mineflayer-boat/compare/v1.0.1...v1.1.0) (2026-11-03)
 
 
