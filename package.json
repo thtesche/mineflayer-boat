@@ -1,6 +1,6 @@
 {
   "name": "mineflayer-boat",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Boat travel for Mineflayer bots: place, board, drive (client-side boat simulation), land and recover a boat.",
   "type": "module",
   "main": "./dist/index.js",

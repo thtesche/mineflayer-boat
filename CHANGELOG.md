@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/thtesche/mineflayer-boat/compare/v1.0.0...v1.0.1) (2026-11-03)
+
+
+### Bug Fixes
+
+* release workflow should only run after tests pass ([eda73f9](https://github.com/thtesche/mineflayer-boat/commit/eda73f9d27043e98f2ca5f123747440eaba5a503))
+
 # 1.0.0 (2026-11-03)
 
 
