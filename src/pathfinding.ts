@@ -58,12 +58,19 @@ export function findWaterPath (
     const dz = Math.abs(z - start.z)
     if (Math.sqrt(dx * dx + dz * dz) > maxDistance) return false
 
-    // Check if block is water and boat fits there
-    // Test a few y levels around the water surface
-    for (let y = start.y - 2; y <= start.y + 2; y++) {
-      const block = bot.blockAt(new Vec3(x + 0.5, y, z + 0.5))
-      if (isWaterBlock(block) && boatFits(blockLookup, x + 0.5, z + 0.5, y)) {
-        return true
+    // Check if water exists at this block and boat fits
+    // Float coordinates needed for boat centering (x.5, z.5)
+    const boatX = x + 0.5
+    const boatZ = z + 0.5
+
+    // Test a few y levels around the start y
+    for (let y = Math.floor(start.y) - 2; y <= Math.floor(start.y) + 2; y++) {
+      const block = bot.blockAt(new Vec3(boatX, y, boatZ))
+      // Both water and boat fitting are required
+      if (isWaterBlock(block)) {
+        if (boatFits(blockLookup, boatX, boatZ, y)) {
+          return true
+        }
       }
     }
     return false
