@@ -70,6 +70,16 @@ export interface DriveResult {
   position: Vec3
 }
 
+export type TravelStatus = 'success' | 'failed_to_place' | 'failed_to_board' | 'failed_to_drive' | 'failed_to_recover'
+
+export interface TravelResult {
+  status: TravelStatus
+  boat?: Entity
+  driveResult?: DriveResult
+  recovered: boolean
+  message: string
+}
+
 export interface Boat {
   /** Resolved options. */
   readonly options: Required<Pick<BoatOptions, 'maxConsecutiveCorrections'>> & { kinematics: KinematicParams }
@@ -92,6 +102,11 @@ export interface Boat {
    * the item is back in the inventory.
    */
   recover: (boat: Entity, options?: RecoverOptions) => Promise<boolean>
+  /**
+   * Complete boat journey in one call: place → board → drive → leave → recover.
+   * Returns result with status (success or which step failed), drive metrics, and recovery status.
+   */
+  travel: (from: Vec3, to: Vec3, options?: SignalOptions & DriveOptions & RecoverOptions & { faceToward?: Vec3 }) => Promise<TravelResult>
   /** True while riding a boat or raft. */
   isRiding: () => boolean
 }
@@ -367,5 +382,88 @@ export function createBoat (bot: Bot, options: BoatOptions = {}): Boat {
     }
   }
 
-  return { options: resolved, findItem, place, board, drive, leave, recover, isRiding }
+  async function travel (from: Vec3, to: Vec3, opts: SignalOptions & DriveOptions & RecoverOptions & { faceToward?: Vec3 } = {}): Promise<TravelResult> {
+    try {
+      // Step 1: Place boat
+      let boat: Entity
+      try {
+        boat = await place(from, opts)
+      } catch (err: any) {
+        return {
+          status: 'failed_to_place',
+          recovered: false,
+          message: `Failed to place boat at ${from.toString()}: ${err.message}`
+        }
+      }
+
+      // Step 2: Board
+      try {
+        await board(boat, opts)
+      } catch (err: any) {
+        return {
+          status: 'failed_to_board',
+          boat,
+          recovered: false,
+          message: `Failed to board boat: ${err.message}`
+        }
+      }
+
+      // Step 3: Drive
+      let driveResult: DriveResult
+      try {
+        driveResult = await drive(to, opts)
+      } catch (err: any) {
+        return {
+          status: 'failed_to_drive',
+          boat,
+          recovered: false,
+          message: `Failed to drive to ${to.toString()}: ${err.message}`
+        }
+      }
+
+      // Step 4: Leave
+      try {
+        await leave({ signal: opts.signal, faceToward: opts.faceToward })
+      } catch (err: any) {
+        return {
+          status: 'failed_to_drive',
+          boat,
+          driveResult,
+          recovered: false,
+          message: `Drove successfully but failed to leave boat: ${err.message}`
+        }
+      }
+
+      // Step 5: Recover
+      let recovered = false
+      try {
+        recovered = await recover(boat, opts)
+      } catch (err: any) {
+        // Recovery failed, but drive succeeded
+        return {
+          status: 'failed_to_recover',
+          boat,
+          driveResult,
+          recovered: false,
+          message: `Drove and left boat, but recovery failed: ${err.message}`
+        }
+      }
+
+      return {
+        status: 'success',
+        boat,
+        driveResult,
+        recovered,
+        message: `Successfully traveled from ${from.toString()} to ${to.toString()}`
+      }
+    } catch (err: any) {
+      return {
+        status: 'failed_to_drive',
+        recovered: false,
+        message: `Unexpected error during travel: ${err.message}`
+      }
+    }
+  }
+
+  return { options: resolved, findItem, place, board, drive, leave, recover, travel, isRiding }
 }

@@ -5,6 +5,7 @@
 
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest'
 import type { Bot } from 'mineflayer'
+import { Vec3 } from 'vec3'
 import { defaultConfig, defaultArena, connectBot, resetArena, sleep } from './setup.js'
 
 describe('Boat Lifecycle', () => {
@@ -106,5 +107,41 @@ describe('Boat Lifecycle', () => {
     const dismountIdx = events.indexOf('dismount')
     expect(mountIdx).toBeGreaterThanOrEqual(0)
     expect(dismountIdx).toBeGreaterThan(mountIdx)
+  })
+
+  it('travel() completes full journey in one call', async () => {
+    const result = await bot.boat.travel(defaultArena.launch, defaultArena.finish, { faceToward: defaultArena.farShore })
+
+    expect(result.status).toBe('success')
+    expect(result.recovered).toBe(true)
+    expect(result.driveResult).toBeDefined()
+    expect(result.driveResult?.status).toBe('arrived')
+    expect(result.driveResult?.distance).toBeGreaterThan(50)
+    expect(result.message).toContain('Successfully traveled')
+    expect(bot.vehicle).toBeFalsy()
+
+    const boatItem = bot.inventory.items().find((item: any) => item.name?.includes('boat'))
+    expect(boatItem).toBeDefined()
+  })
+
+  it('travel() handles placement failure gracefully', async () => {
+    const result = await bot.boat.travel(new Vec3(-5, -60, 0.5), defaultArena.finish)
+
+    expect(result.status).toBe('failed_to_place')
+    expect(result.recovered).toBe(false)
+    expect(result.driveResult).toBeUndefined()
+    expect(result.message).toContain('Failed to place')
+  })
+
+  it('travel() in succession trips works correctly', async () => {
+    for (let i = 0; i < 2; i++) {
+      if (i > 0) await resetArena(bot, testConfig, defaultArena)
+
+      const result = await bot.boat.travel(defaultArena.launch, defaultArena.finish, { faceToward: defaultArena.farShore })
+
+      expect(result.status).toBe('success')
+      expect(result.recovered).toBe(true)
+      expect(bot.vehicle).toBeFalsy()
+    }
   })
 })
