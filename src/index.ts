@@ -5,6 +5,7 @@ import { type BoatOptions, createBoat } from './boat.js'
 export * from './boat.js'
 export * from './kinematics.js'
 export * from './water.js'
+export * from './pathfinding.js'
 
 /**
  * Mineflayer plugin: `bot.loadPlugin(plugin)` installs `bot.boat`. Mineflayer

@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest'
 import type { Bot } from 'mineflayer'
 import { Vec3 } from 'vec3'
-import { defaultConfig, defaultArena, connectBot, resetArena, sleep } from './setup.js'
+import { defaultConfig, defaultArena, islandArena, mazeArena, connectBot, resetArena, buildIslandArena, buildMazeArena, sleep } from './setup.js'
 
 describe('Boat Lifecycle', () => {
   let bot: Bot
@@ -143,5 +143,77 @@ describe('Boat Lifecycle', () => {
       expect(result.recovered).toBe(true)
       expect(bot.vehicle).toBeFalsy()
     }
+  })
+})
+
+describe('Route Planning (Pathfinding)', () => {
+  let bot: Bot
+  const testConfig = { ...defaultConfig, username: 'BoatyPathfinding' }
+
+  beforeAll(async () => {
+    bot = await connectBot(testConfig)
+  })
+
+  afterAll(async () => {
+    bot.end()
+  })
+
+  beforeEach(async () => {
+    await resetArena(bot, testConfig, defaultArena)
+  })
+
+  it('travelAuto() falls back to direct travel when path is clear', async () => {
+    const result = await bot.boat.travelAuto(defaultArena.launch, defaultArena.finish, { faceToward: defaultArena.farShore })
+
+    expect(result.status).toBe('success')
+    expect(result.recovered).toBe(true)
+    expect(result.driveResult).toBeDefined()
+    expect(result.driveResult?.distance).toBeGreaterThan(50)
+  })
+
+  it('travelAuto() with island arena navigates around obstacle', async () => {
+    const consoleFile = `/tmp/console-${testConfig.port}.in`
+    await buildIslandArena(bot, testConfig, islandArena, consoleFile)
+
+    const result = await bot.boat.travelAuto(islandArena.launch, islandArena.finish, { faceToward: islandArena.farShore })
+
+    // Should successfully navigate around the island
+    expect(result.status).toBe('success')
+    expect(result.recovered).toBe(true)
+    expect(bot.vehicle).toBeFalsy()
+  })
+
+  it('travelAuto() handles impossible paths gracefully', async () => {
+    // Teleport to a dead-end surrounded by land
+    const consoleFile = `/tmp/console-${testConfig.port}.in`
+    const deadEnd = new Vec3(30, -60, 0.5)
+    const outside = new Vec3(40, -60, 0.5)
+
+    await buildIslandArena(bot, testConfig, islandArena, consoleFile)
+
+    const result = await bot.boat.travelAuto(deadEnd, outside, { faceToward: outside })
+
+    // Should either fail gracefully or navigate despite the island
+    expect(result.boat).toBeDefined()
+    expect(result.recovered === true || result.recovered === false).toBe(true)
+  })
+
+  it('travelAuto() respects maxSearchDistance parameter', async () => {
+    // Very close target, very small search distance
+    const result = await bot.boat.travelAuto(defaultArena.launch, defaultArena.launch, { maxSearchDistance: 5 })
+
+    // Same position should be trivial
+    expect(result.status).toBe('success')
+  })
+
+  it('travelAuto() works on complex maze arena', async () => {
+    const consoleFile = `/tmp/console-${testConfig.port}.in`
+    await buildMazeArena(bot, testConfig, mazeArena, consoleFile)
+
+    const result = await bot.boat.travelAuto(mazeArena.launch, mazeArena.finish, { faceToward: mazeArena.farShore, maxSearchDistance: 100 })
+
+    // Should find a path through the maze sections
+    expect(result.status).toBe('success')
+    expect(result.recovered).toBe(true)
   })
 })

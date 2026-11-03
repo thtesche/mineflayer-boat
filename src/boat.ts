@@ -13,6 +13,7 @@ import {
   yawToward
 } from './kinematics.js'
 import { boatFits, isWaterBlock } from './water.js'
+import { findWaterPath, type Waypoint } from './pathfinding.js'
 
 type Entity = Bot['entity']
 type Item = NonNullable<Bot['heldItem']>
@@ -107,6 +108,12 @@ export interface Boat {
    * Returns result with status (success or which step failed), drive metrics, and recovery status.
    */
   travel: (from: Vec3, to: Vec3, options?: SignalOptions & DriveOptions & RecoverOptions & { faceToward?: Vec3 }) => Promise<TravelResult>
+  /**
+   * Complete boat journey with automatic pathfinding over water.
+   * Finds a path around obstacles, then drives waypoint-by-waypoint to the goal.
+   * Falls back to direct travel if no path is found.
+   */
+  travelAuto: (from: Vec3, to: Vec3, options?: SignalOptions & DriveOptions & RecoverOptions & { faceToward?: Vec3, maxSearchDistance?: number }) => Promise<TravelResult>
   /** True while riding a boat or raft. */
   isRiding: () => boolean
 }
@@ -465,5 +472,39 @@ export function createBoat (bot: Bot, options: BoatOptions = {}): Boat {
     }
   }
 
-  return { options: resolved, findItem, place, board, drive, leave, recover, travel, isRiding }
+  async function travelAuto (from: Vec3, to: Vec3, opts: SignalOptions & DriveOptions & RecoverOptions & { faceToward?: Vec3, maxSearchDistance?: number } = {}): Promise<TravelResult> {
+    const maxSearch = opts.maxSearchDistance ?? 128
+
+    // Find path over water
+    const path = findWaterPath(from, to, bot, maxSearch)
+
+    if (path === null) {
+      // No path found; try direct travel and let it fail if water is blocked
+      return travel(from, to, opts)
+    }
+
+    // Travel via waypoints
+    let lastPos = from
+    for (const waypoint of path) {
+      const waypointPos = new Vec3(waypoint.x + 0.5, from.y, waypoint.z + 0.5)
+      const result = await travel(lastPos, waypointPos, opts)
+
+      if (result.status !== 'success') {
+        return {
+          status: result.status,
+          boat: result.boat,
+          driveResult: result.driveResult,
+          recovered: result.recovered,
+          message: `Failed at waypoint (${waypoint.x}, ${waypoint.z}): ${result.message}`
+        }
+      }
+
+      lastPos = waypointPos
+    }
+
+    // Final leg to goal
+    return travel(lastPos, to, opts)
+  }
+
+  return { options: resolved, findItem, place, board, drive, leave, recover, travel, travelAuto, isRiding }
 }

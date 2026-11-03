@@ -56,6 +56,28 @@ export const defaultArena: TestArena = {
 }
 
 /**
+ * Arena with a simple island in the middle of the channel (requires pathfinding to go around)
+ */
+export const islandArena: TestArena = {
+  laneZ: 0.5,
+  start: new Vec3(-0.5, -60, 0.5),
+  launch: new Vec3(1.8, -60.1, 0.5),
+  finish: new Vec3(59.0, 0, 0.5),
+  farShore: new Vec3(61, -60, 0.5),
+}
+
+/**
+ * Arena with a more complex maze layout (requires multiple waypoints)
+ */
+export const mazeArena: TestArena = {
+  laneZ: 0.5,
+  start: new Vec3(-0.5, -60, 0.5),
+  launch: new Vec3(1.8, -60.1, 0.5),
+  finish: new Vec3(50.0, -60.1, 10.5),
+  farShore: new Vec3(52, -60, 12),
+}
+
+/**
  * Write a command to the server console (Docker container or local).
  * When MC_DOCKER names a running container, pipe the command into its
  * /server/console.in via `docker exec`; otherwise append to the local file.
@@ -197,6 +219,59 @@ export async function resetArena(bot: Bot, config: TestConfig, arena: TestArena)
   // close together — e.g. a near-instant test followed by the next beforeEach —
   // safe.
   await sleep(500)
+}
+
+/**
+ * Build island arena: adds a 7x7 island at x=25-31, z=-2..4 that requires pathfinding
+ */
+export async function buildIslandArena(bot: Bot, config: TestConfig, arena: TestArena, consoleFile: string = `/tmp/console-${config.port}.in`): Promise<void> {
+  await buildArena(bot, config, arena, consoleFile)
+  const islandCmds = [
+    'fill 25 -62 -2 31 -60 4 grass_block',
+  ]
+  sendConsoleCommands(consoleFile, islandCmds)
+  await sleep(500)
+}
+
+/**
+ * Build maze arena: creates multiple sections of land with gaps requiring navigation
+ */
+export async function buildMazeArena(bot: Bot, config: TestConfig, arena: TestArena, consoleFile: string = `/tmp/console-${config.port}.in`): Promise<void> {
+  const cmds = [
+    'gamerule doDaylightCycle false',
+    'gamerule doMobSpawning false',
+    'gamerule doWeatherCycle false',
+    'time set day',
+    'weather clear',
+    'difficulty peaceful',
+    'kill @e[type=!minecraft:player]',
+    'fill -6 -63 -6 66 -61 20 grass_block',
+    'fill 0 -63 -2 15 -61 15 water',
+    'fill 20 -63 -2 35 -61 15 water',
+    'fill 40 -63 -2 55 -61 15 water',
+    'fill 16 -63 5 19 -61 15 water',
+    'fill 36 -63 5 39 -61 15 water',
+    `clear ${config.username}`,
+    `gamemode survival ${config.username}`,
+    `give ${config.username} oak_boat 1`,
+    `tp ${config.username} ${arena.start.x} ${arena.start.y} ${arena.start.z} -90 30`,
+  ]
+  sendConsoleCommands(consoleFile, cmds)
+  
+  const deadline = Date.now() + 10000
+  while (Date.now() < deadline) {
+    const water = bot.blockAt(new Vec3(10, -61, 5))
+    if (
+      bot.entity.position.distanceTo(arena.start) < 0.6 &&
+      water?.name === 'water' &&
+      bot.inventory.items().some((item: any) => item.name.includes('boat'))
+    ) {
+      return
+    }
+    await sleep(100)
+  }
+
+  throw new Error('maze arena not ready')
 }
 
 
