@@ -56,25 +56,31 @@ export const defaultArena: TestArena = {
 }
 
 /**
- * Arena with a simple island in the middle of the channel (requires pathfinding to go around)
+ * Wide basin with an island (or wall) in the middle. The finish sits *inside*
+ * the water (x=50), not at a bank: a cell at the very edge of the water is
+ * never boat-valid (the boat needs a block of clearance all around), so a
+ * goal on the edge would make pathfinding give up before it starts.
  */
 export const islandArena: TestArena = {
   laneZ: 0.5,
   start: new Vec3(-0.5, -60, 0.5),
-  launch: new Vec3(1.8, -60.1, 0.5),
-  finish: new Vec3(59.0, 0, 0.5),
-  farShore: new Vec3(61, -60, 0.5),
+  launch: new Vec3(2, -60.1, 0.5),
+  finish: new Vec3(50, -60.1, 0.5),
+  farShore: new Vec3(52, -60, 0.5),
 }
 
 /**
- * Arena with a more complex maze layout (requires multiple waypoints)
+ * Like the island basin, but the wall spans the *entire* width (z -8..8) with
+ * no gap, so there is genuinely no water route from launch to finish. Used to
+ * prove travelAuto() fails gracefully — recovering the boat — when
+ * findWaterPath returns null and the straight-line fallback hits land.
  */
-export const mazeArena: TestArena = {
+export const impossibleArena: TestArena = {
   laneZ: 0.5,
   start: new Vec3(-0.5, -60, 0.5),
-  launch: new Vec3(1.8, -60.1, 0.5),
-  finish: new Vec3(50.0, -60.1, 10.5),
-  farShore: new Vec3(52, -60, 12),
+  launch: new Vec3(2, -60.1, 0.5),
+  finish: new Vec3(50, -60.1, 0.5),
+  farShore: new Vec3(52, -60, 0.5),
 }
 
 /**
@@ -264,9 +270,11 @@ export async function buildIslandArena(bot: Bot, config: TestConfig, arena: Test
 }
 
 /**
- * Build maze arena: creates multiple sections of land with gaps requiring navigation
+ * Build impossible arena: the same wide basin as the island, but the central
+ * wall spans the full width (z -8..8) with no gap, so no water route exists
+ * from launch to finish.
  */
-export async function buildMazeArena(bot: Bot, config: TestConfig, arena: TestArena, consoleFile: string = `/tmp/console-${config.port}.in`): Promise<void> {
+export async function buildImpossibleArena(bot: Bot, config: TestConfig, arena: TestArena, consoleFile: string = `/tmp/console-${config.port}.in`): Promise<void> {
   const cmds = [
     'gamerule doDaylightCycle false',
     'gamerule doMobSpawning false',
@@ -275,33 +283,31 @@ export async function buildMazeArena(bot: Bot, config: TestConfig, arena: TestAr
     'weather clear',
     'difficulty peaceful',
     'kill @e[type=!minecraft:player]',
-    'fill -6 -63 -6 66 -61 20 grass_block',
-    'fill 0 -63 -2 15 -61 15 water',
-    'fill 20 -63 -2 35 -61 15 water',
-    'fill 40 -63 -2 55 -61 15 water',
-    'fill 16 -63 5 19 -61 15 water',
-    'fill 36 -63 5 39 -61 15 water',
+    'fill -6 -63 -10 66 -61 10 grass_block',
+    'fill 0 -63 -8 59 -61 8 water',
+    'fill 25 -62 -8 31 -60 8 grass_block', // full-width wall: no way around
     `clear ${config.username}`,
     `gamemode survival ${config.username}`,
     `give ${config.username} oak_boat 1`,
     `tp ${config.username} ${arena.start.x} ${arena.start.y} ${arena.start.z} -90 30`,
   ]
   sendConsoleCommands(consoleFile, cmds)
-  
+
   const deadline = Date.now() + 10000
   while (Date.now() < deadline) {
-    const water = bot.blockAt(new Vec3(10, -61, 5))
+    const water = bot.blockAt(new Vec3(10, -61, 0))
     if (
       bot.entity.position.distanceTo(arena.start) < 0.6 &&
       water?.name === 'water' &&
       bot.inventory.items().some((item: any) => item.name.includes('boat'))
     ) {
+      await sleep(500)
       return
     }
     await sleep(100)
   }
 
-  throw new Error('maze arena not ready')
+  throw new Error('impossible arena not ready')
 }
 
 

@@ -13,7 +13,7 @@ import {
   yawToward
 } from './kinematics.js'
 import { boatFits, isWaterBlock } from './water.js'
-import { findWaterPath, type Waypoint } from './pathfinding.js'
+import { findWaterPath, simplifyPath, type Waypoint } from './pathfinding.js'
 
 type Entity = Bot['entity']
 type Item = NonNullable<Bot['heldItem']>
@@ -43,6 +43,14 @@ export interface DriveOptions extends SignalOptions {
   onCorrection?: (info: { tick: number, server: Vec3, predicted: Vec3 }) => void
   /** Give up after this many ticks (default: generous for the distance). */
   maxTicks?: number
+  /**
+   * Override how close (in blocks) the target must be to count as reached.
+   * Defaults to the tuned kinematics value. A boat's minimum turning circle
+   * (speed / turn rate) is close to a block wide, so it cannot spiral in on a
+   * point it must approach from the side: with a tight tolerance it orbits
+   * forever. `travelAuto` raises this for its guidance waypoints.
+   */
+  arriveDistance?: number
 }
 
 export interface RecoverOptions extends SignalOptions {
@@ -187,7 +195,9 @@ export function createBoat (bot: Bot, options: BoatOptions = {}): Boat {
   async function drive (target: Vec3, opts: DriveOptions = {}): Promise<DriveResult> {
     const boat = bot.vehicle
     if (boat == null || !isRiding()) throw new Error('not_riding: not in a boat')
-    const params = resolved.kinematics
+    const params = opts.arriveDistance != null
+      ? { ...resolved.kinematics, arriveDistance: opts.arriveDistance }
+      : resolved.kinematics
     const start = boat.position.clone()
     // The server stops simulating a boat once a player controls it; hold the
     // height it settled at, which is where vanilla clients float it.
@@ -456,6 +466,18 @@ export function createBoat (bot: Bot, options: BoatOptions = {}): Boat {
         }
       }
 
+      // The boat left and was recovered, but a non-'arrived' drive means we
+      // never actually reached the goal (blocked by land, timed out, etc.).
+      if (driveResult.status !== 'arrived') {
+        return {
+          status: 'failed_to_drive',
+          boat,
+          driveResult,
+          recovered,
+          message: `Could not reach ${to.toString()}: drive ended '${driveResult.status}'`
+        }
+      }
+
       return {
         status: 'success',
         boat,
@@ -475,35 +497,129 @@ export function createBoat (bot: Bot, options: BoatOptions = {}): Boat {
   async function travelAuto (from: Vec3, to: Vec3, opts: SignalOptions & DriveOptions & RecoverOptions & { faceToward?: Vec3, maxSearchDistance?: number } = {}): Promise<TravelResult> {
     const maxSearch = opts.maxSearchDistance ?? 128
 
-    // Find path over water
     const path = findWaterPath(from, to, bot, maxSearch)
 
-    if (path === null) {
-      // No path found; try direct travel and let it fail if water is blocked
+    // No route around obstacles: fall back to a single straight-line journey
+    // and let the drive report back if the water is actually blocked.
+    if (path == null || path.length === 0) {
       return travel(from, to, opts)
     }
 
-    // Travel via waypoints
-    let lastPos = from
-    for (const waypoint of path) {
-      const waypointPos = new Vec3(waypoint.x + 0.5, from.y, waypoint.z + 0.5)
-      const result = await travel(lastPos, waypointPos, opts)
-
-      if (result.status !== 'success') {
-        return {
-          status: result.status,
-          boat: result.boat,
-          driveResult: result.driveResult,
-          recovered: result.recovered,
-          message: `Failed at waypoint (${waypoint.x}, ${waypoint.z}): ${result.message}`
-        }
-      }
-
-      lastPos = waypointPos
+    // One waypoint per block would stop and restart the boat each block;
+    // keep only the turning points as block centres, skipping the start cell.
+    const waypoints = simplifyPath(path)
+      .map((w: Waypoint) => new Vec3(w.x + 0.5, from.y, w.z + 0.5))
+      .filter(wp => horizontalDistance(wp, from) >= 1)
+    // Aim at the precise goal for the final leg. The simplified path already
+    // ends at the goal's block centre, so replace that near-duplicate rather
+    // than append `to` after it — a tiny backward hop between the two would
+    // make the boat spin trying to face a point just behind it.
+    if (waypoints.length > 0 && horizontalDistance(waypoints[waypoints.length - 1], to) < 1.5) {
+      waypoints[waypoints.length - 1] = to
+    } else {
+      waypoints.push(to)
     }
 
-    // Final leg to goal
-    return travel(lastPos, to, opts)
+    // Guidance waypoints only steer the boat along the route, so a loose
+    // tolerance is fine and avoids the boat orbiting a turning point it cannot
+    // spiral onto. The final goal uses a tighter (but still turn-radius-sized)
+    // tolerance so the boat actually finishes near the destination.
+    const WAYPOINT_ARRIVE = 1.2
+    const GOAL_ARRIVE = 0.75
+
+    // Place and board once; the boat stays mounted across every segment.
+    let boat: Entity
+    try {
+      boat = await place(from, opts)
+    } catch (err: any) {
+      return {
+        status: 'failed_to_place',
+        recovered: false,
+        message: `Failed to place boat at ${from.toString()}: ${err.message}`
+      }
+    }
+
+    try {
+      await board(boat, opts)
+    } catch (err: any) {
+      return {
+        status: 'failed_to_board',
+        boat,
+        recovered: false,
+        message: `Failed to board boat: ${err.message}`
+      }
+    }
+
+    // Drive the segments in turn, staying in the boat between them.
+    let lastDrive: DriveResult | undefined
+    let totalDistance = 0
+    let totalTicks = 0
+    for (let i = 0; i < waypoints.length; i++) {
+      const wp = waypoints[i]
+      const isGoal = i === waypoints.length - 1
+      try {
+        lastDrive = await drive(wp, { ...opts, arriveDistance: isGoal ? GOAL_ARRIVE : WAYPOINT_ARRIVE })
+      } catch (err: any) {
+        await leaveAndRecoverQuietly(opts)
+        return {
+          status: 'failed_to_drive',
+          boat,
+          driveResult: lastDrive,
+          recovered: false,
+          message: `Failed driving toward ${wp.toString()}: ${err.message}`
+        }
+      }
+      totalDistance += lastDrive.distance
+      totalTicks += lastDrive.ticks
+      // Blocked/timeout/lost: stop here and recover where we ended up.
+      if (lastDrive.status !== 'arrived') break
+    }
+
+    const aggregate: DriveResult | undefined = lastDrive == null
+      ? undefined
+      : { ...lastDrive, distance: totalDistance, ticks: totalTicks }
+
+    // Leave and recover once, wherever the boat ended up.
+    try {
+      await leave({ signal: opts.signal, faceToward: opts.faceToward })
+    } catch (err: any) {
+      return {
+        status: 'failed_to_drive',
+        boat,
+        driveResult: aggregate,
+        recovered: false,
+        message: `Drove but failed to leave boat: ${err.message}`
+      }
+    }
+
+    let recovered = false
+    try {
+      recovered = await recover(boat, opts)
+    } catch (err: any) {
+      return {
+        status: 'failed_to_recover',
+        boat,
+        driveResult: aggregate,
+        recovered: false,
+        message: `Left boat but recovery failed: ${err.message}`
+      }
+    }
+
+    const arrived = lastDrive?.status === 'arrived'
+    return {
+      status: arrived ? 'success' : 'failed_to_drive',
+      boat,
+      driveResult: aggregate,
+      recovered,
+      message: arrived
+        ? `Traveled from ${from.toString()} to ${to.toString()} via ${waypoints.length} waypoint(s)`
+        : `Drove ${totalDistance.toFixed(1)} blocks but could not reach the goal (last drive: ${lastDrive?.status ?? 'none'})`
+    }
+  }
+
+  /** Best-effort dismount + recover used after a mid-journey drive error. */
+  async function leaveAndRecoverQuietly (opts: SignalOptions & RecoverOptions & { faceToward?: Vec3 }): Promise<void> {
+    try { await leave({ signal: opts.signal, faceToward: opts.faceToward }) } catch {}
   }
 
   return { options: resolved, findItem, place, board, drive, leave, recover, travel, travelAuto, isRiding }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { findWaterPath } from '../src/pathfinding.js'
+import { findWaterPath, simplifyPath } from '../src/pathfinding.js'
 import { Vec3 } from 'vec3'
 import type { Bot } from 'mineflayer'
 
@@ -144,5 +144,41 @@ describe('Pathfinding', () => {
     expect(path).not.toBeNull()
     expect(path![0]).toEqual({ x: 0, z: 0 })
     expect(path![path!.length - 1]).toEqual({ x: 5, z: 5 })
+  })
+})
+
+describe('simplifyPath', () => {
+  it('returns short paths unchanged', () => {
+    expect(simplifyPath([])).toEqual([])
+    expect(simplifyPath([{ x: 0, z: 0 }])).toEqual([{ x: 0, z: 0 }])
+    expect(simplifyPath([{ x: 0, z: 0 }, { x: 1, z: 0 }])).toEqual([
+      { x: 0, z: 0 }, { x: 1, z: 0 }
+    ])
+  })
+
+  it('collapses a straight run to its endpoints', () => {
+    const path = [
+      { x: 0, z: 0 }, { x: 1, z: 0 }, { x: 2, z: 0 }, { x: 3, z: 0 }, { x: 4, z: 0 }
+    ]
+    expect(simplifyPath(path)).toEqual([{ x: 0, z: 0 }, { x: 4, z: 0 }])
+  })
+
+  it('keeps the turning point of an L-shape', () => {
+    const path = [
+      { x: 0, z: 0 }, { x: 1, z: 0 }, { x: 2, z: 0 }, // east
+      { x: 2, z: 1 }, { x: 2, z: 2 } // then north
+    ]
+    expect(simplifyPath(path)).toEqual([
+      { x: 0, z: 0 }, { x: 2, z: 0 }, { x: 2, z: 2 }
+    ])
+  })
+
+  it('keeps every corner of a staircase', () => {
+    const path = [
+      { x: 0, z: 0 }, { x: 1, z: 0 }, { x: 1, z: 1 }, { x: 2, z: 1 }, { x: 2, z: 2 }
+    ]
+    expect(simplifyPath(path)).toEqual([
+      { x: 0, z: 0 }, { x: 1, z: 0 }, { x: 1, z: 1 }, { x: 2, z: 1 }, { x: 2, z: 2 }
+    ])
   })
 })

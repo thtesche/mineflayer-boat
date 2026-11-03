@@ -102,6 +102,33 @@ export function findWaterPath (
   return null
 }
 
+/**
+ * Collapse a dense per-block path into turning points. A* yields one waypoint
+ * per block; driving to every one would stop and restart the boat each block.
+ * This keeps only the first point, the last point, and any point where the
+ * step direction changes, so the caller drives straight segments.
+ */
+export function simplifyPath (path: Waypoint[]): Waypoint[] {
+  if (path.length <= 2) return path.slice()
+
+  const result: Waypoint[] = [path[0]]
+  let prevDx = path[1].x - path[0].x
+  let prevDz = path[1].z - path[0].z
+
+  for (let i = 1; i < path.length - 1; i++) {
+    const dx = path[i + 1].x - path[i].x
+    const dz = path[i + 1].z - path[i].z
+    if (dx !== prevDx || dz !== prevDz) {
+      result.push(path[i])
+      prevDx = dx
+      prevDz = dz
+    }
+  }
+
+  result.push(path[path.length - 1])
+  return result
+}
+
 function reconstructPath (cameFrom: Map<string, string>, current: string): Waypoint[] {
   const path: Waypoint[] = []
   let c = current
