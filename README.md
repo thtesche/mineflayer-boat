@@ -88,38 +88,65 @@ on every call, and `estimate(from, to)` in ticks.
 
 ## Development
 
+### Quick Start
+
 ```bash
 npm install
-npm run build              # dist/ with .js and .d.ts
-npm test                   # unit tests (vitest), no server needed
-npm run test:integration   # integration tests (requires Docker or running server)
-npm run test:all           # all tests
+npm run build              # compile to dist/
+```
+
+**Test locally (no server):**
+```bash
+npm test                   # unit tests only
+```
+
+**Test with Docker (both 1.21.4 + 26.1):**
+```bash
+docker compose up -d                    # start Minecraft servers
+npm run test:all                        # unit + integration tests
+docker compose down                     # stop servers
+```
+
+Or with Make:
+```bash
+make docker-build          # one-time setup
+make docker-up && make test-all && make docker-down
+# or simply: make test-docker
 ```
 
 ### Unit Tests
+
+Fast, offline (no server):
 
 ```bash
 npm test
 ```
 
-Tests the kinematics model and water detection offline, no server needed.
+Tests kinematics model and water detection.
 
 ### Integration Tests
 
-Full end-to-end tests on live Minecraft servers (1.21.4 and 26.1):
+Full end-to-end tests on live servers. **Requires a running Minecraft server:**
 
 ```bash
+# Option A: Docker (recommended)
+docker compose up -d minecraft-1.21.4
+npm run test:integration
+docker compose down
+
+# Option B: Local server (needs Java 21)
+npm run server:setup
+bash spike/server/start.sh &            # in background
 npm run test:integration
 ```
 
-Tests placement, boarding, straight-line driving at various speeds, dismount mechanics, server
-correction handling, and edge cases (blockage, chunk boundaries, long distances). See
-[`test/integration/README.md`](test/integration/README.md) for details on each test file and how
-to visualize bot movement.
+Tests placement, boarding, driving at various speeds, dismount mechanics, server correction
+handling, and edge cases. See [`test/integration/README.md`](test/integration/README.md) for
+details on each test and how to visualize bot movement.
 
-Results are stable: 31 tests pass, 1 skipped. Each test gets a fresh arena (shared Minecraft world
-is reset with server console commands), and the full suite is serialized (tests must not run
-concurrently or they will interfere with each other's world state).
+Results: 31 tests pass, 1 skipped. Each test gets a fresh arena (world is reset via console
+commands), and the suite runs serially (no concurrent test files, to avoid interference).
+
 
 ### Local Testing
 
