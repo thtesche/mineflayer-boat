@@ -1,16 +1,16 @@
 name: Release
 
 on:
-  push:
+  workflow_run:
+    workflows: [Test]
     branches: [main]
+    types: [completed]
 
 jobs:
   release:
     runs-on: ubuntu-latest
-    # Only run if commits are not already tagged by semantic-release
-    if: |
-      !contains(github.event.head_commit.message, '[skip ci]') &&
-      github.event_name == 'push'
+    # Only release if all tests passed
+    if: github.event.workflow_run.conclusion == 'success'
     permissions:
       contents: write
       packages: write
