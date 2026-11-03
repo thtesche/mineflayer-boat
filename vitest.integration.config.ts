@@ -17,7 +17,7 @@ export default defineConfig({
     // would wipe out boats from any file running at the same time.
     fileParallelism: false,
     pool: 'forks',
-    poolOptions: { forks: { singleFork: true } },
+    singleFork: true,
     sequence: { concurrent: false },
     reporter: 'verbose',
     outputFile: './test-results/integration.json',
