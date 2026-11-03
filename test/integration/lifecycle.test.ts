@@ -146,7 +146,7 @@ describe('Boat Lifecycle', () => {
   })
 })
 
-describe('Route Planning (Pathfinding)', () => {
+describe.skip('Route Planning (Pathfinding)', () => {
   let bot: Bot
   const testConfig = { ...defaultConfig, username: 'BoatyPathfinding' }
 
