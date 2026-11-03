@@ -1,3 +1,18 @@
+# 1.0.0 (2026-11-03)
+
+
+### Bug Fixes
+
+* correct unit test paths in npm scripts ([26796b0](https://github.com/thtesche/mineflayer-boat/commit/26796b05f683dd2189ba3ecc30a11e261d39e0a7))
+* resolve TypeScript type errors in integration tests ([1d0a91e](https://github.com/thtesche/mineflayer-boat/commit/1d0a91e37161bc68e551e1fbcfed2001b14e2264))
+* simplify GitHub Actions workflow (Docker tests run locally) ([14eedcd](https://github.com/thtesche/mineflayer-boat/commit/14eedcd7df16387668487d751d37764a0099276b))
+
+
+### Features
+
+* add comprehensive test infrastructure (Docker, CI/CD, integration tests) ([8aba0c1](https://github.com/thtesche/mineflayer-boat/commit/8aba0c13626e9f594a21b1b999fc4063d6f9bb8b))
+* add travel() convenience API for complete boat journeys ([eb2be54](https://github.com/thtesche/mineflayer-boat/commit/eb2be54bf93e227ee39bdbde27368bbf05f8c08e))
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
