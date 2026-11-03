@@ -222,15 +222,45 @@ export async function resetArena(bot: Bot, config: TestConfig, arena: TestArena)
 }
 
 /**
- * Build island arena: adds a 7x7 island at x=25-31, z=-2..4 that requires pathfinding
+ * Build island arena: a wide basin (z -8..8) with an island blocking only the
+ * middle (z -3..3) at x 25..31. The boat is 1.375 wide and needs a clear 3x3
+ * water neighbourhood, so the island must leave several free lanes on each side
+ * for a detour; a basin only as wide as the island would have no path at all.
  */
 export async function buildIslandArena(bot: Bot, config: TestConfig, arena: TestArena, consoleFile: string = `/tmp/console-${config.port}.in`): Promise<void> {
-  await buildArena(bot, config, arena, consoleFile)
-  const islandCmds = [
-    'fill 25 -62 -2 31 -60 4 grass_block',
+  const cmds = [
+    'gamerule doDaylightCycle false',
+    'gamerule doMobSpawning false',
+    'gamerule doWeatherCycle false',
+    'time set day',
+    'weather clear',
+    'difficulty peaceful',
+    'kill @e[type=!minecraft:player]',
+    'fill -6 -63 -10 66 -61 10 grass_block',
+    'fill 0 -63 -8 59 -61 8 water',
+    'fill 25 -62 -3 31 -60 3 grass_block', // island blocks only the centre lanes
+    `clear ${config.username}`,
+    `gamemode survival ${config.username}`,
+    `give ${config.username} oak_boat 1`,
+    `tp ${config.username} ${arena.start.x} ${arena.start.y} ${arena.start.z} -90 30`,
   ]
-  sendConsoleCommands(consoleFile, islandCmds)
-  await sleep(500)
+  sendConsoleCommands(consoleFile, cmds)
+
+  const deadline = Date.now() + 10000
+  while (Date.now() < deadline) {
+    const water = bot.blockAt(new Vec3(10, -61, 0))
+    if (
+      bot.entity.position.distanceTo(arena.start) < 0.6 &&
+      water?.name === 'water' &&
+      bot.inventory.items().some((item: any) => item.name.includes('boat'))
+    ) {
+      await sleep(500)
+      return
+    }
+    await sleep(100)
+  }
+
+  throw new Error('island arena not ready')
 }
 
 /**
