@@ -39,13 +39,19 @@ npm run spike               # Terminal 2: run test
 
 Go/no-go test: place → board → drive → leave → recover. Takes ~3 minutes per run.
 
-### 3. Docker Multi-Version (automated, both 1.21.4 + 26.1)
+### 3. Integration Tests (automated, both 1.21.4 + 26.1)
 ```bash
 make docker-build
-make test-docker
+docker compose up -d
+npm run test:integration         # Main suite: placement, driving, dismount, etc.
+npm run test:integration:pathfinding  # Pathfinding suite: A* around obstacles
+docker compose down
 ```
 
-Automatically starts servers, runs spike, validates both versions. Takes ~5 minutes total.
+Main integration suite (~6 min): 35 tests on a shared sequential server.
+Pathfinding suite (~45 sec): 4 tests on a dedicated fresh server (isolated from main).
+
+Combined: ~10 minutes total for full CI coverage.
 
 ## Workflow
 
@@ -55,8 +61,9 @@ Automatically starts servers, runs spike, validates both versions. Takes ~5 minu
    ```
 
 2. **Write tests first** (TDD):
-   - Unit test in `test/unit/`
-   - Integration test in `test/integration/` if needed
+   - Unit test in `test/unit/` (kinematics, water detection, pathfinding)
+   - Integration test in `test/integration/` if it needs a live server (placement, driving, recovery)
+   - Pathfinding integration test in `test/integration/pathfinding.test.ts` only if adding route planning logic
 
 3. **Implement the feature**:
    - Update `src/` files
@@ -64,10 +71,13 @@ Automatically starts servers, runs spike, validates both versions. Takes ~5 minu
 
 4. **Run tests locally**:
    ```bash
-   npm run test          # Unit tests
-   npm run build         # Type check + compile
-   npm run spike         # Local server test (if relevant)
-   make test-docker      # Or Docker tests
+   npm run test                       # Unit tests
+   npm run build                      # Type check + compile
+   npm run spike                      # Local server test (if relevant)
+   docker compose up -d               # Start servers
+   npm run test:integration           # Main integration suite (35 tests)
+   npm run test:integration:pathfinding  # Pathfinding suite (4 tests, fresh server)
+   docker compose down                # Stop servers
    ```
 
 5. **Commit with clear message**:
@@ -82,7 +92,7 @@ Automatically starts servers, runs spike, validates both versions. Takes ~5 minu
 
    - Add description of what changed and why
    - Link any relevant issues
-   - GitHub Actions will automatically run all tests
+   - GitHub Actions will automatically run all tests (unit + spike + integration + pathfinding)
 
 ## Code Style
 
@@ -123,10 +133,13 @@ docs: clarify vehicle_move packet handling
 
 ### Before opening PR, verify:
 ```bash
-npm run typecheck          # TypeScript strict mode
-npm run build              # Compiles to dist/
-npm test                   # All unit tests pass
-make test-docker           # Both versions pass
+npm run typecheck                      # TypeScript strict mode
+npm run build                          # Compiles to dist/
+npm test                               # All unit tests pass
+docker compose up -d
+npm run test:integration               # Main integration suite (35 tests)
+npm run test:integration:pathfinding   # Pathfinding suite (4 tests)
+docker compose down
 ```
 
 ### For new features:
@@ -148,40 +161,50 @@ make test-docker           # Both versions pass
 - Documentation updated if user-facing
 
 **For authors:**
-- [ ] All tests pass locally
-- [ ] GitHub Actions passes (all 3 workflows)
+- [ ] All tests pass locally (unit + integration + pathfinding)
+- [ ] GitHub Actions passes (unit + spike + integration + pathfinding jobs)
 - [ ] No console errors/warnings
-- [ ] Documentation updated (README, DOCKER.md, TEST.md if relevant)
+- [ ] Documentation updated (README.md, TEST.md, CONTRIBUTING.md if relevant)
 - [ ] Commits are atomic and well-described
 
 ## Project Structure
 
 ```
 src/
-  index.ts          # Plugin export
-  boat.ts           # Main API (place, board, drive, leave, recover)
-  kinematics.ts     # Physics model
-  water.ts          # Water detection
-  augment.ts        # TypeScript augmentation
+  index.ts              # Plugin export
+  boat.ts               # Main API (place, board, drive, travel, travelAuto, leave, recover)
+  pathfinding.ts        # A* route planning
+  kinematics.ts         # Physics model
+  water.ts              # Water/obstacle detection
+  augment.ts            # TypeScript augmentation
 
 test/
-  unit/             # No server required
+  unit/                 # No server required
     kinematics.test.ts
     water.test.ts
-  integration/      # Docker servers required
-    (planned)
-  utils/
-    viewer.ts       # Prismarine Viewer integration
+    pathfinding.test.ts
+  integration/          # Docker servers required
+    setup.ts
+    placement.test.ts
+    drive.test.ts
+    lifecycle.test.ts
+    corrections.test.ts
+    dismount.test.ts
+    edge-cases.test.ts
+    pathfinding.test.ts  # Route planning (separate CI job with fresh server)
 
 spike/
-  spike.ts          # Go/no-go test script
+  spike.ts              # Go/no-go test script
   server/
     setup.sh, start.sh  # Test server management
 
 .github/
-  workflows/test.yml    # GitHub Actions CI
+  workflows/test.yml    # GitHub Actions CI: unit + spike + integration + pathfinding
   docker/               # Multi-version Dockerfiles
   scripts/              # Test utilities
+
+vitest.integration.config.ts    # Main integration suite
+vitest.pathfinding.config.ts    # Pathfinding integration suite
 ```
 
 ## Common Tasks
@@ -193,16 +216,24 @@ spike/
 4. Update README "Usage" or API docs
 
 ### Fix a server interaction bug
-1. Add regression test in `test/integration/`
-2. Implement fix in `src/boat.ts` or `src/entities.ts`
-3. Run `make test-docker` to verify both versions
-4. Document any version-specific behavior
+1. Add regression test in `test/integration/lifecycle.test.ts` or appropriate file
+2. Implement fix in `src/boat.ts`
+3. Verify unit tests + main integration suite pass
+4. Document any version-specific behavior in README or TEST.md
+
+### Add a pathfinding feature or fix
+1. Add unit test in `test/unit/pathfinding.test.ts` (offline)
+2. Implement in `src/pathfinding.ts`
+3. Add integration test in `test/integration/pathfinding.test.ts` if server-dependent
+4. Run `npm run test:integration:pathfinding` against a fresh server (takes ~45sec)
+5. Verify unit and integration tests pass
 
 ### Optimize boat speed/physics
 1. Run spike with different `SPIKE_CRUISE` values
 2. Benchmark against vanilla boat behavior
-3. Update physics constants in `kinematics.ts`
+3. Update physics constants in `src/kinematics.ts`
 4. Add speed-specific test case in `test/integration/drive.test.ts`
+5. Verify main integration suite still passes (35 tests)
 
 ## Questions?
 

@@ -8,9 +8,9 @@
 Boat travel for [Mineflayer](https://github.com/PrismarineJS/mineflayer) bots: place a carried
 boat, board it, drive it, land on the far shore and get the boat back.
 
-> **Status: Stable with integration tests.** Placement, boarding, straight-line driving, dismount and recovery
-> work reliably on vanilla 1.21.4 and 26.1 servers. Full integration test suite (31 tests, 1 skipped) gates CI.
-> Route planning over water, the whole-trip `travel()` call and `estimate()` are not built yet.
+> **Status: Stable with pathfinding.** Placement, boarding, driving (straight or via A* route planning),
+> dismount and recovery work reliably on vanilla 1.21.4 and 26.1 servers. Full integration test suite 
+> (35 tests + 4 pathfinding tests, 1 skipped) gates CI. Remaining: `estimate()` in ticks.
 
 ## Why a plugin is needed
 
@@ -67,6 +67,7 @@ Options go in the bot options (`createBot({ ..., boat: { ... } })`) or through
 | `kinematics.cruiseSpeed` | `0.3` | cruising speed, blocks/tick (vanilla terminal speed on water ≈ 0.4) |
 | `kinematics.acceleration` / `deceleration` | `0.04` | speed change per tick |
 | `kinematics.maxTurnRate` | `6` | degrees per tick |
+| `kinematics.arriveDistance` | `0.05` | how close the target must be to count as reached (blocks) |
 | `maxConsecutiveCorrections` | `3` | server corrections in a row that end a drive with `rejected` |
 
 ### API
@@ -74,17 +75,26 @@ Options go in the bot options (`createBot({ ..., boat: { ... } })`) or through
 - `bot.boat.findItem()` – best boat item in the inventory (plain before chest boats).
 - `bot.boat.place(water, { signal?, item? })` → boat entity.
 - `bot.boat.board(boat, { signal? })` – mounts and waits for the server.
-- `bot.boat.drive(target, { signal?, onTick?, onCorrection?, maxTicks? })` → `DriveResult`
+- `bot.boat.drive(target, { signal?, onTick?, onCorrection?, maxTicks?, arriveDistance? })` → `DriveResult`
   (`status`: `arrived | blocked | rejected | aborted | lost | timeout`, `ticks`, `distance`,
   `averageSpeed`, `topSpeed`, `corrections`, `elapsedMs`, `position`). Drives a straight line;
-  every step is checked so the boat's 1.375-wide box stays over water with room above.
+  every step is checked so the boat's 1.375-wide box stays over water with room above. `arriveDistance`
+  (default: tuned kinematics value) sets how close the target must be to count as reached; useful for
+  guidance waypoints where orbiting is better than overshooting (a boat's minimum turning radius is ~1 block).
+- `bot.boat.travel(from, to, { signal?, faceToward? })` → `{ status, recovered, boat?, distance?, ticks? }`
+  One call that places, boards, drives, leaves and recovers the boat in one sequence. Returns `success`
+  only if all steps succeed; otherwise returns the step that failed (`place_failed`, `board_failed`,
+  `failed_to_drive`, etc.) and still recovers the boat.
+- `bot.boat.travelAuto(from, to, { signal?, faceToward?, maxSearchDistance? })` → `{ status, recovered, boat?, driveResult? }`
+  Like `travel()` but runs A* pathfinding to route around obstacles. Computes waypoints, drives them
+  with a loose guidance tolerance (boats can't spiral onto turning points) and the goal with a tighter
+  one. Returns the same status values as `travel()`.
 - `bot.boat.leave({ signal?, faceToward? })` – dismounts by sneaking.
 - `bot.boat.recover(boat, { signal?, itemName?, walkTo? })` → `true` when the item is back. The
   item usually sinks out of reach of the shore; without `walkTo` the bot swims to it in a straight
   line and returns to where it stood.
 
-Planned seams to the host (from the design study): `walkTo(pos)` for land legs, an `AbortSignal`
-on every call, and `estimate(from, to)` in ticks.
+Planned seams to the host: `estimate(from, to)` time in ticks for a route.
 
 ## Development
 
@@ -103,8 +113,15 @@ npm test                   # unit tests only
 **Test with Docker (both 1.21.4 + 26.1):**
 ```bash
 docker compose up -d                    # start Minecraft servers
-npm run test:all                        # unit + integration tests
+npm run test                            # unit tests only
+npm run test:integration                # main integration suite (35 tests)
+npm run test:integration:pathfinding    # route planning tests (4 tests, requires fresh server)
 docker compose down                     # stop servers
+```
+
+For the full suite (unit + integration + pathfinding):
+```bash
+npm run test:all
 ```
 
 Or with Make:
@@ -141,11 +158,19 @@ npm run test:integration
 ```
 
 Tests placement, boarding, driving at various speeds, dismount mechanics, server correction
-handling, and edge cases. See [`test/integration/README.md`](test/integration/README.md) for
+handling, edge cases, and route planning. See [`test/integration/README.md`](test/integration/README.md) for
 details on each test and how to visualize bot movement.
 
-Results: 31 tests pass, 1 skipped. Each test gets a fresh arena (world is reset via console
-commands), and the suite runs serially (no concurrent test files, to avoid interference).
+The integration suite is split into two test runs with fresh servers to manage load:
+
+- **Main integration** (35 tests, 1 skipped): lifecycle, placement, driving, corrections, dismount, edge cases.
+  Runs against a shared sequential server.
+- **Pathfinding integration** (4 tests): A* route planning around obstacles, island/impossible arenas, arc
+  coalescing. Runs in its own dedicated CI job to isolate long drives from the main suite's tight 
+  edge-of-channel drives.
+
+Each test gets a fresh arena (world is reset via console commands), and test files run serially to avoid
+interference.
 
 
 ### Local Testing

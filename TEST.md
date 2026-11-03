@@ -68,33 +68,56 @@ Test flow:
 4. Server stops
 5. Test passes if bot returns home and boat recovered
 
-### Level 3: Integration Tests (Planned)
+### Level 3: Integration Tests
 
-**What**: Detailed scenarios with Prismarine Viewer output
+**What**: End-to-end scenarios: placement, driving, dismount, corrections, edge cases
 **Where**: `test/integration/`
-**Time**: ~1-2min per scenario
-**Server**: Docker containers
-**Output**: HTML with 3D viewer
+**Time**: ~6min total (both versions)
+**Server**: Docker containers, one shared sequential server per run
+**Command**: `npm run test:integration`
 
-Planned test scenarios:
+Test files:
 - `placement.test.ts` — boat placement on various water surfaces
 - `drive.test.ts` — driving at different cruise speeds (0.30, 0.36, 0.40, 0.50 b/t)
 - `lifecycle.test.ts` — full journey: place → board → drive → leave → recover
 - `corrections.test.ts` — server correction handling
 - `dismount.test.ts` — entity_action vs other dismount patterns
-- `edge-cases.test.ts` — chunk boundaries, narrow channels, etc.
+- `edge-cases.test.ts` — chunk boundaries, narrow channels, edge drives
 
-Each test generates:
-- Console logs with timing
-- Prismarine Viewer snapshot (3D world + bot path)
-- Comparison screenshot (expected vs actual)
+Results: 35 tests, 1 skipped.
 
 ```bash
-# Run integration tests
+# Run main integration suite
 npm run test:integration
 
 # Watch mode
 npm run test:integration -- --watch
+```
+
+### Level 3b: Pathfinding Integration Tests
+
+**What**: Route planning with A* around obstacles, waypoint coalescing, graceful failure
+**Where**: `test/integration/pathfinding.test.ts`
+**Time**: ~45sec total (both versions)
+**Server**: Docker containers, **dedicated fresh servers per CI job** (isolated from main suite)
+**Command**: `npm run test:integration:pathfinding`
+
+Test scenarios:
+- `travelAuto()` on clear water (falls back to direct drive)
+- `travelAuto()` navigating around an island (A* detour)
+- `travelAuto()` failing gracefully with no route (full-width wall), recovering the boat
+- Respecting `maxSearchDistance` parameter
+
+Results: 4 tests pass.
+
+Why separate CI job: Pathfinding drives place once, drive long A* routes while mounted (several minutes),
+then recover — cumulative heavy load. Running on the same shared server as the main integration suite would
+tip the fragile edge-of-channel drives in later test files into `blocked`. The dedicated job starts a fresh
+server just for pathfinding, keeping both suites' results reliable.
+
+```bash
+# Run pathfinding integration tests
+npm run test:integration:pathfinding
 ```
 
 ## Local Development
@@ -182,14 +205,20 @@ docker-compose down
 
 **Workflow**: `.github/workflows/test.yml`
 
-Runs on every push/PR:
-1. **Unit tests** (fast, always run)
-2. **Docker multi-version** (1.21.4 + 26.1 in parallel)
-3. **Spike validation** (both versions)
+Runs on every push/PR (3 separate matrix jobs + aggregation):
+
+1. **Unit tests** (fast, no server)
+2. **Docker spike** (1.21.4 + 26.1 in parallel) — quick go/no-go test
+3. **Integration tests** (1.21.4 + 26.1, fresh servers) — 35 tests, 1 skipped per version
+4. **Pathfinding integration** (1.21.4 + 26.1, separate fresh servers) — 4 tests per version
+5. **Test Status** — aggregates all above; fails if any job fails
+
+The pathfinding matrix job is dedicated and isolated: it starts its own fresh servers, runs only
+the pathfinding tests, and does not contend with the main integration suite's shared server. This
+keeps both suites' results reliable despite the heavy load from long A* drives.
 
 Artifacts:
-- Test logs
-- Prismarine Viewer HTML (integration tests only, when available)
+- Test logs (test-results/integration.json, test-results/pathfinding.json)
 
 ## Troubleshooting
 
@@ -227,27 +256,25 @@ MC_PORT=25601 npm run spike
 
 ```
 test/
-├── unit/                      # No server required
-│   ├── kinematics.test.ts     # Physics model
-│   └── water.test.ts          # Block detection
-├── integration/               # Docker servers
-│   ├── setup.ts              # Common test server lifecycle
-│   ├── placement.test.ts
-│   ├── drive.test.ts
-│   ├── lifecycle.test.ts
-│   ├── corrections.test.ts
-│   ├── dismount.test.ts
-│   └── edge-cases.test.ts
-└── utils/
-    ├── testBot.ts            # Helper: bot setup, assertions
-    ├── viewer.ts             # Prismarine Viewer integration
-    └── assertions.ts         # Custom matchers
+├── unit/                           # No server required
+│   ├── kinematics.test.ts          # Physics model
+│   ├── water.test.ts               # Block detection
+│   └── pathfinding.test.ts         # A* route planning (unit)
+├── integration/                    # Docker servers
+│   ├── setup.ts                    # Common test server lifecycle
+│   ├── placement.test.ts           # Main suite
+│   ├── drive.test.ts               # Main suite
+│   ├── lifecycle.test.ts           # Main suite
+│   ├── corrections.test.ts         # Main suite
+│   ├── dismount.test.ts            # Main suite
+│   ├── edge-cases.test.ts          # Main suite
+│   └── pathfinding.test.ts         # Separate suite (dedicated CI job)
 
 spike/
-├── spike.ts                   # Go/no-go test (23 test runs)
+├── spike.ts                        # Go/no-go test (23 test runs)
 └── server/
-    ├── setup.sh              # Download vanilla server
-    └── start.sh              # Start with console.in input
+    ├── setup.sh                    # Download vanilla server
+    └── start.sh                    # Start with console.in input
 
 .github/
 ├── docker/
@@ -255,12 +282,14 @@ spike/
 │   ├── minecraft-26.1/Dockerfile
 │   └── server.properties.template
 ├── scripts/
-│   └── docker-test.sh        # Multi-version test runner
+│   └── docker-test.sh              # Multi-version test runner
 └── workflows/
-    └── test.yml              # GitHub Actions CI
+    └── test.yml                    # GitHub Actions CI: unit + spike + integration + pathfinding
 
-docker-compose.yml            # Multi-version orchestration
-Makefile                       # Quick shortcuts
+vitest.integration.config.ts        # Main integration suite (excludes pathfinding.test.ts)
+vitest.pathfinding.config.ts        # Pathfinding suite only
+docker-compose.yml                  # Multi-version orchestration
+Makefile                            # Quick shortcuts
 ```
 
 ## Next Steps
