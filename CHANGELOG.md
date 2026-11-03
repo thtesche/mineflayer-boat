@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/thtesche/mineflayer-boat/compare/v1.1.1...v1.2.0) (2026-11-03)
+
+
+### Features
+
+* travelAuto drives around obstacles end to end ([c33ae1e](https://github.com/thtesche/mineflayer-boat/commit/c33ae1e0a3e4c256b6cca0b5d62955ccbeb5866a))
+
 ## [1.1.1](https://github.com/thtesche/mineflayer-boat/compare/v1.1.0...v1.1.1) (2026-11-03)
 
 
