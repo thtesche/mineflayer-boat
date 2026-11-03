@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/thtesche/mineflayer-boat/compare/v1.0.1...v1.1.0) (2026-11-03)
+
+
+### Features
+
+* add automatic pathfinding for boat travel around obstacles ([d6b5afd](https://github.com/thtesche/mineflayer-boat/commit/d6b5afd8847607e257a40c03b59479cd8c3100e5))
+
 ## [1.0.1](https://github.com/thtesche/mineflayer-boat/compare/v1.0.0...v1.0.1) (2026-11-03)
 
 
