@@ -2,7 +2,7 @@
 
 [![Test](https://github.com/thtesche/mineflayer-boat/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/thtesche/mineflayer-boat/actions/workflows/test.yml)
 [![npm version](https://img.shields.io/npm/v/mineflayer-boat.svg)](https://www.npmjs.com/package/mineflayer-boat)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js 18+](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
 
 Boat travel for [Mineflayer](https://github.com/PrismarineJS/mineflayer) bots: place a carried
@@ -192,4 +192,4 @@ follows earlier in-bot implementations, in particular
 
 ## License
 
-MIT
+[MIT](LICENSE) – Copyright (c) 2024 Thomas Tesche
