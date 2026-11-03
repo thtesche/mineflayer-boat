@@ -127,10 +127,68 @@ jobs:
           path: test-results/
           retention-days: 7
 
+  pathfinding:
+    name: Pathfinding Integration - ${{ matrix.minecraft-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        minecraft-version: ['1.21.4', '26.1']
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Build Docker image
+        run: docker compose build minecraft-${{ matrix.minecraft-version }}
+
+      # Route-planning drives are long and load-heavy; run them against a server
+      # this job starts fresh, isolated from the main integration suite.
+      - name: Start Minecraft server
+        run: |
+          docker compose up -d minecraft-${{ matrix.minecraft-version }}
+          echo "Waiting for server..."
+          sleep 20
+
+      - name: Check server logs
+        if: failure()
+        run: docker compose logs minecraft-${{ matrix.minecraft-version }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Run pathfinding integration tests
+        run: |
+          case "${{ matrix.minecraft-version }}" in
+            1.21.4) PORT=25599 ;;
+            26.1)   PORT=25600 ;;
+          esac
+          MC_HOST=127.0.0.1 MC_PORT=$PORT \
+          MC_DOCKER=mineflayer-boat-${{ matrix.minecraft-version }} \
+          npm run test:integration:pathfinding
+
+      - name: Stop server
+        if: always()
+        run: docker compose down
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pathfinding-test-results-${{ matrix.minecraft-version }}
+          path: test-results/
+          retention-days: 7
+
   status:
     name: Test Status
     runs-on: ubuntu-latest
-    needs: [unit, docker-matrix, integration]
+    needs: [unit, docker-matrix, integration, pathfinding]
     if: always()
     steps:
       - name: Check test status
@@ -148,8 +206,12 @@ jobs:
             echo "❌ Integration tests failed"
             FAILED=1
           fi
+          if [ "${{ needs.pathfinding.result }}" = "failure" ]; then
+            echo "❌ Pathfinding integration tests failed"
+            FAILED=1
+          fi
           if [ $FAILED -eq 0 ]; then
-            echo "✅ Unit + Docker spike + integration tests passed"
+            echo "✅ Unit + Docker spike + integration + pathfinding tests passed"
             exit 0
           else
             exit 1

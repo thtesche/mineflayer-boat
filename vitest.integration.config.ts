@@ -1,8 +1,13 @@
-import { defineConfig } from 'vitest/config'
+import { defineConfig, configDefaults } from 'vitest/config'
 
 export default defineConfig({
   test: {
     include: ['test/integration/**/*.test.ts'],
+    // Pathfinding runs its own long live drives and shares this single server
+    // sequentially with every other file, so its cumulative load used to tip
+    // the fragile edge-of-channel drives in later files into 'blocked'. It now
+    // runs in a dedicated CI job against a fresh server (vitest.pathfinding.config.ts).
+    exclude: [...configDefaults.exclude, 'test/integration/pathfinding.test.ts'],
     testTimeout: 120000, // 2 minutes per test
     hookTimeout: 60000,  // 1 minute for setup/teardown
     // These run against a live server sharing one machine with the test

@@ -26,6 +26,7 @@
     "test:all": "npm run test && npm run test:integration",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:integration:watch": "vitest --config vitest.integration.config.ts",
+    "test:integration:pathfinding": "vitest run --config vitest.pathfinding.config.ts",
     "test:docker:1.21.4": "bash .github/scripts/docker-test.sh 1.21.4",
     "test:docker:26.1": "bash .github/scripts/docker-test.sh 26.1",
     "test:docker:all": "npm run test:docker:1.21.4 && npm run test:docker:26.1",
